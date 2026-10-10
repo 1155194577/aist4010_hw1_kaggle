@@ -9,9 +9,8 @@ class Config:
     resolution: int = 224
     val_frac: float = 0.2
     batch_size: int = 32
-    num_workers: int = 0
-    backbone: str = "resnet18"
-    lrs: float = 1e-3
+    num_workers: int = 4 ## use 4 worker when have gpu 
+    lr: float = 1e-3
     epochs: int = 10
     augmentation: bool = True
     mean: tuple[float, float, float] = (0.485, 0.456, 0.406)
@@ -22,7 +21,7 @@ class Config:
     val_dir : Path = Path("./data/val")
     test_dir : Path = Path("./data/test")
     optmizer : str = "Adam" 
-    backbone : str = "simpleCNN"
+    backbone : str = "simpleCNN" ## TODO : add resnet 
     checkpoint_path: Path = Path("./checkpoints/best_model.pt")
     
 def to_dict(cfg: Config) -> dict:

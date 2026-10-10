@@ -1,4 +1,5 @@
 import torch
+
 def get_model(model_name, num_classes=10):
     if model_name == "simpleCNN":
         return CNN(num_classes=num_classes)
@@ -27,3 +28,5 @@ class CNN(torch.nn.Module):
         x = self.dropout(self.relu(self.fc1(x)))
         x = self.fc2(x)
         return x
+
+## TODO : add resnet model

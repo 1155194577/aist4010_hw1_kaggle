@@ -39,3 +39,7 @@ Run the configured trials as separate W&B runs:
 
 Training and validation loss are logged after every epoch. Each trial also
 saves its best checkpoint under `checkpoints/`.
+
+Validation accuracy, weighted F1 score, and the classification report are
+calculated after each epoch. Accuracy and F1 score are logged to W&B as
+`val_accuracy` and `val_f1_score`.
