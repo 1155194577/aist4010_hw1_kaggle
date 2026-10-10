@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+import torch
+
 
 @dataclass
 class Config:
@@ -20,9 +22,28 @@ class Config:
     train_dir : Path = Path("./data/train")
     val_dir : Path = Path("./data/val")
     test_dir : Path = Path("./data/test")
-    optmizer : str = "Adam" 
+    optimizer: str = "Adam"
     backbone : str = "simpleCNN" ## TODO : add resnet 
     checkpoint_path: Path = Path("./checkpoints/best_model.pt")
+
+    def create_optimizer(self, model: torch.nn.Module) -> torch.optim.Optimizer:
+        try:
+            optimizer_class = getattr(torch.optim, self.optimizer)
+        except AttributeError as error:
+            raise ValueError(
+                f"Unsupported optimizer '{self.optimizer}'. "
+                "Choose an optimizer available in torch.optim, such as "
+                "'Adam' or 'SGD'."
+            ) from error
+
+        if not isinstance(optimizer_class, type) or not issubclass(
+            optimizer_class, torch.optim.Optimizer
+        ):
+            raise ValueError(
+                f"'{self.optimizer}' is not a valid torch.optim optimizer class."
+            )
+
+        return optimizer_class(model.parameters(), lr=self.lr)
     
 def to_dict(cfg: Config) -> dict:
     return {
@@ -33,7 +54,7 @@ def to_dict(cfg: Config) -> dict:
         "batch_size": cfg.batch_size,
         "num_workers": cfg.num_workers,
         "backbone": cfg.backbone,
-        "lrs": cfg.lrs,
+        "lr": cfg.lr,
         "epochs": cfg.epochs,
         "augmentation": cfg.augmentation,
         "mean": cfg.mean,
@@ -43,6 +64,6 @@ def to_dict(cfg: Config) -> dict:
         "train_dir": str(cfg.train_dir),
         "val_dir": str(cfg.val_dir),
         "test_dir": str(cfg.test_dir),
-        "optimizer": cfg.optmizer,
+        "optimizer": cfg.optimizer,
         "checkpoint_path": str(cfg.checkpoint_path),
     }

@@ -21,7 +21,7 @@ def main() -> None:
     for trial_id, params in enumerate(TRIALS, start=1):
         cfg = replace(
             base_cfg,
-            lrs=params["learning_rate"],
+            lr=params["learning_rate"],
             batch_size=params["batch_size"],
             epochs=params["epochs"],
             augmentation=params["augmentation"],
@@ -36,7 +36,7 @@ def main() -> None:
             train_loader, val_loader = get_train_val_split(cfg)
             num_classes = len(train_loader.dataset.classes)
             model = get_model(cfg.backbone, num_classes=num_classes)
-            optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lrs)
+            optimizer = cfg.create_optimizer(model)
             criterion = torch.nn.CrossEntropyLoss()
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             best_val_loss = training_loop(

@@ -43,3 +43,9 @@ saves its best checkpoint under `checkpoints/`.
 Validation accuracy, weighted F1 score, and the classification report are
 calculated after each epoch. Accuracy and F1 score are logged to W&B as
 `val_accuracy` and `val_f1_score`.
+
+To change the optimizer, update the `optimizer` field in `Config`:
+
+```python
+optimizer: str = "SGD"  # or "Adam", "AdamW", etc.
+```
