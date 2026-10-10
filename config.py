@@ -23,6 +23,7 @@ class Config:
     test_dir : Path = Path("./data/test")
     optmizer : str = "Adam" 
     backbone : str = "simpleCNN"
+    checkpoint_path: Path = Path("./checkpoints/best_model.pt")
     
 def to_dict(cfg: Config) -> dict:
     return {
@@ -44,4 +45,5 @@ def to_dict(cfg: Config) -> dict:
         "val_dir": str(cfg.val_dir),
         "test_dir": str(cfg.test_dir),
         "optimizer": cfg.optmizer,
+        "checkpoint_path": str(cfg.checkpoint_path),
     }

@@ -1,2 +1,6 @@
 venv/
 data/*
+checkpoints/
+sweep_results/
+wandb/
+__pycache__/
