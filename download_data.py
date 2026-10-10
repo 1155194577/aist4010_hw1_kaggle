@@ -12,6 +12,11 @@ def main():
     if not source.exists():
         raise FileNotFoundError(f"KaggleHub returned a path that does not exist: {source}")
 
+    if source.is_dir():
+        children = list(source.iterdir())
+        if len(children) == 1 and children[0].is_dir():
+            source = children[0]
+
     copied_files = 0
     if source.is_file():
         copy2(source, destination / source.name)
