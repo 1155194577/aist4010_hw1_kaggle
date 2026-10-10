@@ -3,8 +3,28 @@ from pathlib import Path
 import torch
 from PIL import Image
 from torchvision import transforms
-
+from torchvision.datasets import ImageFolder
 from config import Config
+from torch.utils.data import DataLoader, Dataset
+
+
+class TestImageDataset(Dataset):
+    def __init__(self, root: Path | str, transform: transforms.Compose) -> None:
+        self.root = Path(root)
+        self.transform = transform
+        self.image_paths = sorted(
+            path
+            for path in self.root.iterdir()
+            if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png"}
+        )
+
+    def __len__(self) -> int:
+        return len(self.image_paths)
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, str]:
+        image_path = self.image_paths[index]
+        image = Image.open(image_path).convert("RGB")
+        return self.transform(image), image_path.name
 
 
 def make_transform(cfg: Config, train: bool = True) -> transforms.Compose:
@@ -27,55 +47,27 @@ def make_transform(cfg: Config, train: bool = True) -> transforms.Compose:
                 ),
             ]
         )
+    else:
+        transform_list.append(transforms.Resize((cfg.resolution, cfg.resolution)))
+
     transform_list.extend(
         [
             transforms.ToTensor(),
             transforms.Normalize(cfg.mean, cfg.std),
         ]
     )
-    RandomErasing = transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3), value='random')
-    transform_list.append(RandomErasing)
     return transforms.Compose(transform_list)
 
+def get_train_val_split(cfg: Config) -> tuple[DataLoader, DataLoader]:
+    train_dataset = ImageFolder(cfg.train_dir, transform=make_transform(cfg, True))
+    val_dataset = ImageFolder(cfg.val_dir, transform=make_transform(cfg, False))
 
-def visualize_augmentation(
-    image_path: Path | str,
-    cfg: Config,
-    output_path: Path | str = "augmentation_preview.jpg",
-    samples: int = 8,
-) -> Path:
-    if samples < 1:
-        raise ValueError("samples must be at least 1")
+    train_loader = DataLoader(train_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers)
 
-    source = Image.open(image_path).convert("RGB")
-    transform = make_transform(cfg, train=True)
-    to_image = transforms.ToPILImage()
-    mean = torch.tensor(cfg.mean).view(3, 1, 1)
-    std = torch.tensor(cfg.std).view(3, 1, 1)
+    return train_loader, val_loader
 
-    def restore_colors(image: torch.Tensor) -> Image.Image:
-        image = (image.cpu() * std + mean).clamp(0, 1)
-        return to_image(image)
-
-    images = [source.resize((cfg.resolution, cfg.resolution))]
-    images.extend(restore_colors(transform(source)) for _ in range(samples))
-
-    columns = min(4, len(images))
-    rows = (len(images) + columns - 1) // columns
-    grid = Image.new("RGB", (columns * cfg.resolution, rows * cfg.resolution), "white")
-    for index, image in enumerate(images):
-        x = (index % columns) * cfg.resolution
-        y = (index // columns) * cfg.resolution
-        grid.paste(image, (x, y))
-
-    output = Path(output_path)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    grid.save(output)
-    return output
-
-
-if __name__ == "__main__":
-    cfg = Config()
-    image_path = next(Path(cfg.paths).glob("train/*/*.jpg"))
-    output_path = visualize_augmentation(image_path, cfg)
-    print(f"Saved augmentation preview to {output_path}")
+def get_test_loader(cfg: Config) -> DataLoader:
+    test_dataset = TestImageDataset(cfg.test_dir, transform=make_transform(cfg, False))
+    test_loader = DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers)
+    return test_loader

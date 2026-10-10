@@ -18,7 +18,10 @@ class Config:
     std: tuple[float, float, float] = (0.229, 0.224, 0.225)
     crop_scale: tuple[float, float] = (0.8, 1.0)
     crop_ratio: tuple[float, float] = (0.75, 1)
-
+    train_dir : Path = Path("./data/train")
+    val_dir : Path = Path("./data/val")
+    test_dir : Path = Path("./data/test")
+    
     
 def to_dict(cfg: Config) -> dict:
     return {
@@ -36,4 +39,6 @@ def to_dict(cfg: Config) -> dict:
         "std": cfg.std,
         "crop_scale": cfg.crop_scale,
         "crop_ratio": cfg.crop_ratio,
+        "train_dir": str(cfg.train_dir),
+        "val_dir": str(cfg.val_dir),
     }
