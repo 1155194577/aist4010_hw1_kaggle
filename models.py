@@ -1,0 +1,29 @@
+import torch
+def get_model(model_name, num_classes=10):
+    if model_name == "simpleCNN":
+        return CNN(num_classes=num_classes)
+    else:
+        raise ValueError("Unsupported model name")
+
+class CNN(torch.nn.Module):
+    def __init__(self, num_classes=10):
+        super(CNN, self).__init__()
+        self.conv1 = torch.nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
+        self.conv2 = torch.nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+        self.pool = torch.nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
+        self.adaptive_pool = torch.nn.AdaptiveAvgPool2d((4, 4))
+        self.fc1 = torch.nn.Linear(64 * 4 * 4, 128)
+        self.fc2 = torch.nn.Linear(128, num_classes)
+        self.relu = torch.nn.ReLU()
+        self.dropout = torch.nn.Dropout(p=0.5)
+
+    def forward(self, x):
+        x = self.relu(self.conv1(x))
+        x = self.pool(x)
+        x = self.relu(self.conv2(x))
+        x = self.pool(x)
+        x = self.adaptive_pool(x)
+        x = torch.flatten(x, start_dim=1)
+        x = self.dropout(self.relu(self.fc1(x)))
+        x = self.fc2(x)
+        return x

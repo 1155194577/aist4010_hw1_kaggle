@@ -1,4 +1,17 @@
 from config import Config 
-
+from engine import training_loop
+import torch
+from dataset import get_train_val_split
+from models import get_model
 def main(): 
     cfg = Config()
+    train_loader, val_loader = get_train_val_split(cfg)
+    num_classes = len(train_loader.dataset.classes)
+    model = get_model(cfg.backbone, num_classes=num_classes)
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lrs)
+    criterion = torch.nn.CrossEntropyLoss()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    training_loop(model, train_loader, val_loader, optimizer, criterion, device, cfg)
+
+if __name__ == "__main__":
+    main()

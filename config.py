@@ -21,7 +21,8 @@ class Config:
     train_dir : Path = Path("./data/train")
     val_dir : Path = Path("./data/val")
     test_dir : Path = Path("./data/test")
-    
+    optmizer : str = "Adam" 
+    backbone : str = "simpleCNN"
     
 def to_dict(cfg: Config) -> dict:
     return {
@@ -41,4 +42,6 @@ def to_dict(cfg: Config) -> dict:
         "crop_ratio": cfg.crop_ratio,
         "train_dir": str(cfg.train_dir),
         "val_dir": str(cfg.val_dir),
+        "test_dir": str(cfg.test_dir),
+        "optimizer": cfg.optmizer,
     }
