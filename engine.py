@@ -56,7 +56,6 @@ def training_loop(model, train_loader, val_loader, optimizer, criterion, device,
         print(f'Epoch {epoch+1}/{cfg.epochs}, Validation Loss: {val_epoch_loss:.4f}')
         print(f'Validation Accuracy: {val_metrics["accuracy"]:.4f}')
         print(f'Validation F1 Score: {val_metrics["f1_score"]:.4f}')
-        print(f'Validation Classification Report:\n{val_metrics["classification_report"]}')
         if run is not None:
             run.log(
                 {
