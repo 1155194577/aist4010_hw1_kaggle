@@ -1,13 +1,13 @@
 import torch
 
-def get_model(model_name, num_classes=10):
+def get_model(model_name, num_classes=10, dropout=0.5):
     if model_name == "simpleCNN":
-        return CNN(num_classes=num_classes)
+        return CNN(num_classes=num_classes, dropout=dropout)
     else:
         raise ValueError("Unsupported model name")
 
 class CNN(torch.nn.Module):
-    def __init__(self, num_classes=10):
+    def __init__(self, num_classes=10, dropout=0.5):
         super(CNN, self).__init__()
         self.conv1 = torch.nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
         self.conv2 = torch.nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
@@ -16,7 +16,7 @@ class CNN(torch.nn.Module):
         self.fc1 = torch.nn.Linear(64 * 4 * 4, 128)
         self.fc2 = torch.nn.Linear(128, num_classes)
         self.relu = torch.nn.ReLU()
-        self.dropout = torch.nn.Dropout(p=0.5)
+        self.dropout = torch.nn.Dropout(p=dropout)
 
     def forward(self, x):
         x = self.relu(self.conv1(x))

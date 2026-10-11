@@ -10,9 +10,51 @@ from models import get_model
 
 
 TRIALS = [
-    {"learning_rate": 1e-3, "batch_size": 32, "epochs": 10, "augmentation": True},
-    {"learning_rate": 3e-4, "batch_size": 32, "epochs": 10, "augmentation": True},
-    {"learning_rate": 1e-3, "batch_size": 64, "epochs": 10, "augmentation": False},
+    {
+        "learning_rate": 1e-3,
+        "batch_size": 32,
+        "epochs": 10,
+        "augmentation": True,
+        "optimizer": "Adam",
+        "weight_decay": 0.0,
+        "dropout": 0.3,
+    },
+    {
+        "learning_rate": 3e-4,
+        "batch_size": 32,
+        "epochs": 10,
+        "augmentation": True,
+        "optimizer": "Adam",
+        "weight_decay": 1e-4,
+        "dropout": 0.5,
+    },
+    {
+        "learning_rate": 3e-4,
+        "batch_size": 64,
+        "epochs": 10,
+        "augmentation": True,
+        "optimizer": "AdamW",
+        "weight_decay": 1e-4,
+        "dropout": 0.5,
+    },
+    {
+        "learning_rate": 1e-2,
+        "batch_size": 32,
+        "epochs": 10,
+        "augmentation": True,
+        "optimizer": "SGD",
+        "weight_decay": 1e-4,
+        "dropout": 0.5,
+    },
+    {
+        "learning_rate": 1e-3,
+        "batch_size": 64,
+        "epochs": 10,
+        "augmentation": False,
+        "optimizer": "AdamW",
+        "weight_decay": 1e-4,
+        "dropout": 0.3,
+    },
 ]
 
 
@@ -22,9 +64,12 @@ def main() -> None:
         cfg = replace(
             base_cfg,
             lr=params["learning_rate"],
+            optimizer=params["optimizer"],
+            weight_decay=params["weight_decay"],
             batch_size=params["batch_size"],
             epochs=params["epochs"],
             augmentation=params["augmentation"],
+            dropout=params["dropout"],
             checkpoint_path=Path("checkpoints") / f"trial_{trial_id:03d}_best.pt",
         )
         with wandb.init(
@@ -35,7 +80,9 @@ def main() -> None:
         ) as run:
             train_loader, val_loader = get_train_val_split(cfg)
             num_classes = len(train_loader.dataset.classes)
-            model = get_model(cfg.backbone, num_classes=num_classes)
+            model = get_model(
+                cfg.backbone, num_classes=num_classes, dropout=cfg.dropout
+            )
             wandb.watch(model, log="all", log_freq=100)
             optimizer = cfg.create_optimizer(model)
             criterion = torch.nn.CrossEntropyLoss()

@@ -8,13 +8,15 @@ import torch
 class Config:
     paths: Path = Path("./data")
     seeds: int = 42
-    resolution: int = 224
+    resolution: int = 128
     val_frac: float = 0.2
     batch_size: int = 32
     num_workers: int = 4 ## use 4 worker when have gpu 
     lr: float = 1e-3
+    weight_decay: float = 0.0
     epochs: int = 10
     augmentation: bool = True
+    dropout: float = 0.5
     mean = (0.485, 0.456, 0.406)
     std = (0.229, 0.224, 0.225)
     crop_scale = (0.8, 1.0)
@@ -43,7 +45,9 @@ class Config:
                 f"'{self.optimizer}' is not a valid torch.optim optimizer class."
             )
 
-        return optimizer_class(model.parameters(), lr=self.lr)
+        return optimizer_class(
+            model.parameters(), lr=self.lr, weight_decay=self.weight_decay
+        )
     
 def to_dict(cfg: Config) -> dict:
     return {
@@ -55,8 +59,10 @@ def to_dict(cfg: Config) -> dict:
         "num_workers": cfg.num_workers,
         "backbone": cfg.backbone,
         "lr": cfg.lr,
+        "weight_decay": cfg.weight_decay,
         "epochs": cfg.epochs,
         "augmentation": cfg.augmentation,
+        "dropout": cfg.dropout,
         "mean": cfg.mean,
         "std": cfg.std,
         "crop_scale": cfg.crop_scale,
