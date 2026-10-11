@@ -8,7 +8,7 @@ from dataset import get_train_val_split
 from engine import training_loop
 from models import get_model
 
-
+## TODO :　investigate possible GPU memory leakage across trials 
 TRIALS = [
     {
         "learning_rate": 1e-3,

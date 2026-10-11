@@ -3,11 +3,12 @@ from pathlib import Path
 
 import torch
 
-
+## TODO add early stopping 
+## TODO add learning rate scheduler 
 @dataclass
 class Config:
     paths: Path = Path("./data")
-    seeds: int = 42
+    seeds: int = 42 ## TODO : fix this dead code 
     resolution: int = 128
     val_frac: float = 0.2
     batch_size: int = 32

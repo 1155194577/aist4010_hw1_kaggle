@@ -1,3 +1,4 @@
 wandb
 scikit-learn
 tqdm
+kagglehub
