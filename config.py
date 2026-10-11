@@ -1,15 +1,28 @@
 import math
+import random
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import torch
+
+
+def seed_everything(seed) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 
 ## TODO add early stopping
 @dataclass
 class Config:
     paths: Path = Path("./data")
     seeds: int = 42 ## TODO : fix this dead code 
-    resolution: int = 64
+    resolution: int = 128
     val_frac: float = 0.2
     batch_size: int = 32
     num_workers: int = 4 ## use 4 worker when have gpu 
@@ -83,7 +96,7 @@ class Config:
 def to_dict(cfg: Config) -> dict:
     return {
         "paths": str(cfg.paths),
-        "seeds": cfg.seeds,
+        "seed": cfg.seed,
         "resolution": cfg.resolution,
         "val_frac": cfg.val_frac,
         "batch_size": cfg.batch_size,
