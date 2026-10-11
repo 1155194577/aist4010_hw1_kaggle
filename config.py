@@ -26,7 +26,7 @@ class Config:
     val_dir : Path = Path("./data/val")
     test_dir : Path = Path("./data/test")
     optimizer: str = "Adam"
-    backbone : str = "simpleCNN" ## TODO : add resnet 
+    backbone : str = "resnet18"
     checkpoint_path: Path = Path("./checkpoints/best_model.pt")
 
     def create_optimizer(self, model: torch.nn.Module) -> torch.optim.Optimizer:

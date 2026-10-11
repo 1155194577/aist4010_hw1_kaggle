@@ -1,8 +1,16 @@
 import torch
+from torchvision.models import resnet18
 
 def get_model(model_name, num_classes=10, dropout=0.5):
     if model_name == "simpleCNN":
         return CNN(num_classes=num_classes, dropout=dropout)
+    if model_name == "resnet18":
+        model = resnet18(weights=None)
+        model.fc = torch.nn.Sequential(
+            torch.nn.Dropout(p=dropout),
+            torch.nn.Linear(model.fc.in_features, num_classes),
+        )
+        return model
     else:
         raise ValueError("Unsupported model name")
 
@@ -30,5 +38,3 @@ class CNN(torch.nn.Module):
         x = self.dropout(self.relu(self.fc1(x)))
         x = self.fc2(x)
         return x
-
-## TODO : add resnet model
