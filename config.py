@@ -15,10 +15,10 @@ class Config:
     lr: float = 1e-3
     epochs: int = 10
     augmentation: bool = True
-    mean: tuple[float, float, float] = (0.485, 0.456, 0.406)
-    std: tuple[float, float, float] = (0.229, 0.224, 0.225)
-    crop_scale: tuple[float, float] = (0.8, 1.0)
-    crop_ratio: tuple[float, float] = (0.75, 1)
+    mean = (0.485, 0.456, 0.406)
+    std = (0.229, 0.224, 0.225)
+    crop_scale = (0.8, 1.0)
+    crop_ratio = (0.75, 1)
     train_dir : Path = Path("./data/train")
     val_dir : Path = Path("./data/val")
     test_dir : Path = Path("./data/test")
