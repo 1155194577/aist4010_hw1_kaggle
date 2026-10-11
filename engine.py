@@ -98,7 +98,18 @@ def training_loop(
         # Checkpointing
         if val_epoch_loss < best_val_loss:
             best_val_loss = val_epoch_loss
-            torch.save(model.state_dict(), cfg.checkpoint_path)
+            torch.save(
+                {
+                    "model_state": model.state_dict(),
+                    "backbone": cfg.backbone,
+                    "dropout": cfg.dropout,
+                    "resolution": cfg.resolution,
+                    "mean": cfg.mean,
+                    "std": cfg.std,
+                    "class_names": train_loader.dataset.classes,
+                },
+                cfg.checkpoint_path,
+            )
             print(f'Checkpoint saved at epoch {epoch+1} with validation loss {best_val_loss:.4f}')
 
     return best_val_loss

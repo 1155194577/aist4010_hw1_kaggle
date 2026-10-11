@@ -54,3 +54,17 @@ To change the optimizer, update the `optimizer` field in `Config`:
 ```python
 optimizer: str = "SGD"  # or "Adam", "AdamW", etc.
 ```
+
+Generate a submission from the best checkpoint:
+
+```bash
+.venv/bin/python predict.py
+```
+
+Run validation checks against the checkpoint, or enable horizontal-flip test
+time augmentation:
+
+```bash
+.venv/bin/python predict.py --verify
+.venv/bin/python predict.py --tta
+```
