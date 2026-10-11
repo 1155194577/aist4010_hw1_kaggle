@@ -108,6 +108,27 @@ def verify(
     print(f"Validation accuracy: {accuracy:.4f}")
 
 
+def validate_submission_vocabulary(output_labels, sample_submission_path: Path) -> None:
+    if not sample_submission_path.exists():
+        return
+
+    with sample_submission_path.open(newline="") as file:
+        reader = csv.DictReader(file)
+        if reader.fieldnames != ["id", "label"]:
+            raise ValueError(
+                f"Sample submission must have columns ['id', 'label']; "
+                f"found {reader.fieldnames}."
+            )
+        valid_labels = {row["label"] for row in reader}
+
+    unknown_labels = set(output_labels) - valid_labels
+    if unknown_labels:
+        raise ValueError(
+            f"Predictions contain labels not present in {sample_submission_path}: "
+            f"{sorted(unknown_labels)[:5]}"
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", type=Path, default=Path("checkpoints/best_model.pt"))
@@ -140,7 +161,11 @@ def main() -> None:
         raise RuntimeError("Prediction count does not match test dataset size.")
     if any(label < 0 or label >= num_classes for label in predictions):
         raise RuntimeError("Prediction contains a label outside the classifier range.")
-    counts = Counter(predictions)
+    output_labels = [class_names[label] for label in predictions]
+    validate_submission_vocabulary(
+        output_labels, cfg.paths / "sample_submission.csv"
+    )
+    counts = Counter(output_labels)
     if predictions:
         top_label, top_count = counts.most_common(1)[0]
         if top_count > 0.95 * len(predictions) and not args.allow_collapse:
@@ -152,12 +177,12 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", newline="") as file:
         writer = csv.writer(file)
-        writer.writerow(["image_id", "label"])
+        writer.writerow(["id", "label"])
         writer.writerows(
-            (Path(name).stem, label) for name, label in zip(names, predictions)
+            (Path(name).stem, label) for name, label in zip(names, output_labels)
         )
     print(f"Mean confidence: {sum(confidences) / len(confidences):.4f}")
-    print(f"Class distribution: {dict(sorted(Counter(predictions).items()))}")
+    print(f"Class distribution: {dict(sorted(counts.items()))}")
     print(f"Wrote {len(predictions)} predictions to {args.output}")
 
 

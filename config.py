@@ -24,11 +24,11 @@ class Config:
     seed: int = 42
     resolution: int = 64
     val_frac: float = 0.2
-    batch_size: int = 32
+    batch_size: int = 128
     num_workers: int = 4 ## use 4 worker when have gpu 
     lr: float = 1e-3
     weight_decay: float = 1e-4
-    epochs: int = 10
+    epochs: int = 64   
     augmentation: bool = True
     dropout: float = 0.5
     mean = (0.485, 0.456, 0.406)
