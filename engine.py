@@ -1,4 +1,5 @@
 import torch
+from tqdm import tqdm
 
 from metrics import evaluate_model
 
@@ -7,11 +8,12 @@ def training_loop(model, train_loader, val_loader, optimizer, criterion, device,
     model.to(device)
     best_val_loss = float('inf')
     cfg.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-
-    for epoch in range(cfg.epochs):
+    
+    for epoch in tqdm(range(cfg.epochs), desc='Epochs'):
         model.train()
         running_loss = 0.0
-        for images, labels in train_loader:
+        train_progress = tqdm(train_loader, desc=f'Epoch {epoch + 1} Training', leave=False)
+        for images, labels in train_progress:
             images, labels = images.to(device), labels.to(device)
 
             optimizer.zero_grad()
@@ -21,6 +23,7 @@ def training_loop(model, train_loader, val_loader, optimizer, criterion, device,
             optimizer.step()
 
             running_loss += loss.item() * images.size(0)
+            train_progress.set_postfix(loss=f'{loss.item():.4f}')
 
         epoch_loss = running_loss / len(train_loader.dataset)
         print(f'Epoch {epoch+1}/{cfg.epochs}, Training Loss: {epoch_loss:.4f}')
@@ -31,13 +34,15 @@ def training_loop(model, train_loader, val_loader, optimizer, criterion, device,
         val_labels = []
         val_predictions = []
         with torch.no_grad():
-            for images, labels in val_loader:
+            val_progress = tqdm(val_loader, desc=f'Epoch {epoch + 1} Validation', leave=False)
+            for images, labels in val_progress:
                 images, labels = images.to(device), labels.to(device)
                 outputs = model(images)
                 loss = criterion(outputs, labels)
                 val_running_loss += loss.item() * images.size(0)
                 val_labels.extend(labels.cpu().tolist())
                 val_predictions.extend(outputs.argmax(dim=1).cpu().tolist())
+                val_progress.set_postfix(loss=f'{loss.item():.4f}')
 
         val_epoch_loss = val_running_loss / len(val_loader.dataset)
         val_metrics = evaluate_model(val_labels, val_predictions)
