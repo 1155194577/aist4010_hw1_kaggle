@@ -17,6 +17,7 @@ def training_loop(
 ):
     model.to(device)
     best_val_loss = float('inf')
+    global_step = 0
     cfg.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     
     for epoch in tqdm(range(cfg.epochs), desc='Epochs'):
@@ -24,6 +25,7 @@ def training_loop(
         running_loss = 0.0
         train_labels = []
         train_predictions = []
+        lr_samples = []
         train_progress = tqdm(train_loader, desc=f'Epoch {epoch + 1} Training', leave=False)
         for images, labels in train_progress:
             images, labels = images.to(device), labels.to(device)
@@ -35,6 +37,15 @@ def training_loop(
             optimizer.step()
             if scheduler is not None:
                 scheduler.step()
+
+            global_step += 1
+            current_lr = optimizer.param_groups[0]["lr"]
+            lr_samples.append(current_lr)
+            if run is not None:
+                run.log(
+                    {"lr_step": current_lr, "global_step": global_step},
+                    step=global_step,
+                )
 
             running_loss += loss.item() * images.size(0)
             train_labels.extend(labels.detach().cpu().tolist())
@@ -78,7 +89,7 @@ def training_loop(
                     "val_loss": val_epoch_loss,
                     "val_accuracy": val_metrics["accuracy"],
                     "val_f1_score": val_metrics["f1_score"],
-                    "learning_rate": optimizer.param_groups[0]["lr"],
+                    "learning_rate": sum(lr_samples) / len(lr_samples),
                     "train_classification_report": train_metrics["classification_report"],
                     "val_classification_report": val_metrics["classification_report"],
                 }

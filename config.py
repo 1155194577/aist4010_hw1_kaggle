@@ -61,7 +61,7 @@ class Config:
             )
 
         total_steps = self.epochs * steps_per_epoch
-        warmup_steps = self.warmup_epochs * steps_per_epoch
+        warmup_steps = max(1, self.warmup_epochs * steps_per_epoch)
         if total_steps <= 0:
             raise ValueError("The training schedule requires at least one step.")
         if warmup_steps >= total_steps:
@@ -69,7 +69,7 @@ class Config:
 
         def learning_rate_multiplier(step: int) -> float:
             if step < warmup_steps:
-                return step / warmup_steps
+                return (step + 1) / warmup_steps
             cosine_step = step - warmup_steps
             cosine_steps = total_steps - warmup_steps
             return 0.5 * (
