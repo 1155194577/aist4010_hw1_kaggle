@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, Dataset
 
 
 class TestImageDataset(Dataset):
-    def __init__(self, root: Path | str, transform: transforms.Compose) -> None:
+    def __init__(self, root, transform) -> None:
         self.root = Path(root)
         self.transform = transform
         self.image_paths = sorted(
@@ -58,7 +58,7 @@ def make_transform(cfg: Config, train: bool = True) -> transforms.Compose:
     )
     return transforms.Compose(transform_list)
 
-def get_train_val_split(cfg: Config) -> tuple[DataLoader, DataLoader]:
+def get_train_val_split(cfg):
     train_dataset = ImageFolder(cfg.train_dir, transform=make_transform(cfg, True))
     val_dataset = ImageFolder(cfg.val_dir, transform=make_transform(cfg, False))
 
@@ -67,7 +67,7 @@ def get_train_val_split(cfg: Config) -> tuple[DataLoader, DataLoader]:
 
     return train_loader, val_loader
 
-def get_test_loader(cfg: Config) -> DataLoader:
+def get_test_loader(cfg):
     test_dataset = TestImageDataset(cfg.test_dir, transform=make_transform(cfg, False))
     test_loader = DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers)
     return test_loader
