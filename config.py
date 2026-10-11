@@ -22,7 +22,7 @@ def seed_everything(seed) -> None:
 class Config:
     paths: Path = Path("./data")
     seeds: int = 42 ## TODO : fix this dead code 
-    resolution: int = 128
+    resolution: int = 64
     val_frac: float = 0.2
     batch_size: int = 32
     num_workers: int = 4 ## use 4 worker when have gpu 
