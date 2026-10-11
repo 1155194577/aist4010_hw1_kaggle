@@ -9,12 +9,12 @@ import torch
 class Config:
     paths: Path = Path("./data")
     seeds: int = 42 ## TODO : fix this dead code 
-    resolution: int = 128
+    resolution: int = 64
     val_frac: float = 0.2
     batch_size: int = 32
     num_workers: int = 4 ## use 4 worker when have gpu 
     lr: float = 1e-3
-    weight_decay: float = 0.0
+    weight_decay: float = 1e-4
     epochs: int = 10
     augmentation: bool = True
     dropout: float = 0.5
