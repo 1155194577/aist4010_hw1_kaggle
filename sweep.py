@@ -87,7 +87,7 @@ def main() -> None:
             wandb.watch(model, log="all", log_freq=100)
             optimizer = cfg.create_optimizer(model)
             scheduler = cfg.create_scheduler(optimizer, len(train_loader))
-            criterion = torch.nn.CrossEntropyLoss()
+            criterion = torch.nn.CrossEntropyLoss(label_smoothing=cfg.label_smoothing)
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             best_val_loss = training_loop(
                 model,

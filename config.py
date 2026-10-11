@@ -21,7 +21,7 @@ def seed_everything(seed) -> None:
 @dataclass
 class Config:
     paths: Path = Path("./data")
-    seeds: int = 42 ## TODO : fix this dead code 
+    seed: int = 42
     resolution: int = 64
     val_frac: float = 0.2
     batch_size: int = 32
@@ -42,6 +42,7 @@ class Config:
     scheduler: str = "CosineAnnealingWarmup"
     warmup_epochs: int = 1
     backbone : str = "resnet18"
+    label_smoothing: float = 0.1
     checkpoint_path: Path = Path("./checkpoints/best_model.pt")
 
     def create_optimizer(self, model: torch.nn.Module) -> torch.optim.Optimizer:
@@ -117,5 +118,6 @@ def to_dict(cfg: Config) -> dict:
         "optimizer": cfg.optimizer,
         "scheduler": cfg.scheduler,
         "warmup_epochs": cfg.warmup_epochs,
+        "label_smoothing": cfg.label_smoothing,
         "checkpoint_path": str(cfg.checkpoint_path),
     }
