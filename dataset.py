@@ -1,5 +1,7 @@
 from pathlib import Path
+import random
 
+import numpy as np
 import torch
 from PIL import Image
 from torchvision import transforms
@@ -58,12 +60,34 @@ def make_transform(cfg: Config, train: bool = True) -> transforms.Compose:
     )
     return transforms.Compose(transform_list)
 
+
+def seed_worker(worker_id: int) -> None:
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
 def get_train_val_split(cfg):
     train_dataset = ImageFolder(cfg.train_dir, transform=make_transform(cfg, True))
     val_dataset = ImageFolder(cfg.val_dir, transform=make_transform(cfg, False))
+    generator = torch.Generator().manual_seed(cfg.seed)
 
-    train_loader = DataLoader(train_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers)
-    val_loader = DataLoader(val_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=cfg.batch_size,
+        shuffle=True,
+        num_workers=cfg.num_workers,
+        worker_init_fn=seed_worker,
+        generator=generator,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=cfg.batch_size,
+        shuffle=False,
+        num_workers=cfg.num_workers,
+        worker_init_fn=seed_worker,
+        generator=generator,
+    )
 
     return train_loader, val_loader
 

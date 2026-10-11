@@ -3,7 +3,7 @@ import wandb
 from dataclasses import replace
 from pathlib import Path
 
-from config import Config
+from config import Config, seed_everything
 from dataset import get_train_val_split
 from engine import training_loop
 from models import get_model
@@ -72,6 +72,7 @@ def main() -> None:
             dropout=params["dropout"],
             checkpoint_path=Path("checkpoints") / f"trial_{trial_id:03d}_best.pt",
         )
+        seed_everything(cfg.seed)
         with wandb.init(
             project="aist4010-hw1",
             name=f"trial-{trial_id:03d}",
