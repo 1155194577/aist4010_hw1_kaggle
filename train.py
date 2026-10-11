@@ -12,6 +12,7 @@ def main():
         train_loader, val_loader = get_train_val_split(cfg)
         num_classes = len(train_loader.dataset.classes)
         model = get_model(cfg.backbone, num_classes=num_classes)
+        wandb.watch(model, log="all", log_freq=100)
         optimizer = cfg.create_optimizer(model)
         criterion = torch.nn.CrossEntropyLoss()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
