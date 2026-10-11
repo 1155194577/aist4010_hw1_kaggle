@@ -1,4 +1,4 @@
-from config import Config 
+from config import Config, seed_everything
 from engine import training_loop
 import torch
 from dataset import get_train_val_split
@@ -8,6 +8,7 @@ import wandb
 
 def main():
     cfg = Config()
+    seed_everything(cfg.seed)
     with wandb.init(project="aist4010-hw1", config=cfg.__dict__) as run:
         train_loader, val_loader = get_train_val_split(cfg)
         num_classes = len(train_loader.dataset.classes)
