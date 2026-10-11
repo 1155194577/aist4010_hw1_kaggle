@@ -40,6 +40,11 @@ Run the configured trials as separate W&B runs:
 Training and validation loss are logged after every epoch. Each trial also
 saves its best checkpoint under `checkpoints/`.
 
+The default `CosineAnnealingWarmup` learning-rate scheduler warms up
+linearly for one epoch, then decays the learning rate with a cosine schedule
+over the remaining training steps. Its warmup duration can be changed in
+`Config` with `warmup_epochs`.
+
 Validation accuracy, weighted F1 score, and the classification report are
 calculated after each epoch. Accuracy and F1 score are logged to W&B as
 `val_accuracy` and `val_f1_score`.

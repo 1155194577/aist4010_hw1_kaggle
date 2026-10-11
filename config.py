@@ -1,10 +1,10 @@
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
 import torch
 
-## TODO add early stopping 
-## TODO add learning rate scheduler 
+## TODO add early stopping
 @dataclass
 class Config:
     paths: Path = Path("./data")
@@ -26,6 +26,8 @@ class Config:
     val_dir : Path = Path("./data/val")
     test_dir : Path = Path("./data/test")
     optimizer: str = "Adam"
+    scheduler: str = "CosineAnnealingWarmup"
+    warmup_epochs: int = 1
     backbone : str = "resnet18"
     checkpoint_path: Path = Path("./checkpoints/best_model.pt")
 
@@ -48,6 +50,34 @@ class Config:
 
         return optimizer_class(
             model.parameters(), lr=self.lr, weight_decay=self.weight_decay
+        )
+
+    def create_scheduler(
+        self, optimizer, steps_per_epoch):
+        if self.scheduler != "CosineAnnealingWarmup":
+            raise ValueError(
+                f"Unsupported scheduler '{self.scheduler}'. "
+                "Currently supported: 'CosineAnnealingWarmup'."
+            )
+
+        total_steps = self.epochs * steps_per_epoch
+        warmup_steps = self.warmup_epochs * steps_per_epoch
+        if total_steps <= 0:
+            raise ValueError("The training schedule requires at least one step.")
+        if warmup_steps >= total_steps:
+            raise ValueError("warmup_epochs must be less than the total epochs.")
+
+        def learning_rate_multiplier(step: int) -> float:
+            if step < warmup_steps:
+                return step / warmup_steps
+            cosine_step = step - warmup_steps
+            cosine_steps = total_steps - warmup_steps
+            return 0.5 * (
+                1 + math.cos(math.pi * cosine_step / cosine_steps)
+            )
+
+        return torch.optim.lr_scheduler.LambdaLR(
+            optimizer, lr_lambda=learning_rate_multiplier
         )
     
 def to_dict(cfg: Config) -> dict:
@@ -72,5 +102,7 @@ def to_dict(cfg: Config) -> dict:
         "val_dir": str(cfg.val_dir),
         "test_dir": str(cfg.test_dir),
         "optimizer": cfg.optimizer,
+        "scheduler": cfg.scheduler,
+        "warmup_epochs": cfg.warmup_epochs,
         "checkpoint_path": str(cfg.checkpoint_path),
     }

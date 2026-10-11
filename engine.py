@@ -4,7 +4,17 @@ from tqdm import tqdm
 from metrics import evaluate_model
 
 
-def training_loop(model, train_loader, val_loader, optimizer, criterion, device, cfg, run=None):
+def training_loop(
+    model,
+    train_loader,
+    val_loader,
+    optimizer,
+    criterion,
+    device,
+    cfg,
+    run=None,
+    scheduler=None,
+):
     model.to(device)
     best_val_loss = float('inf')
     cfg.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -23,6 +33,8 @@ def training_loop(model, train_loader, val_loader, optimizer, criterion, device,
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
 
             running_loss += loss.item() * images.size(0)
             train_labels.extend(labels.detach().cpu().tolist())
