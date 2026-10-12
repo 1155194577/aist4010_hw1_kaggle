@@ -22,11 +22,11 @@ def seed_everything(seed) -> None:
 class Config:
     paths: Path = Path("./data")
     seed: int = 42
-    resolution: int = 64
+    resolution: int = 128
     val_frac: float = 0.2
     batch_size: int = 128
-    num_workers: int = 4 ## use 4 worker when have gpu 
-    lr: float = 1e-3
+    num_workers: int = 8 ## use 4 worker when have gpu 
+    lr: float = 2e-3
     weight_decay: float = 1e-4
     epochs: int = 64   
     augmentation: bool = True
