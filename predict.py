@@ -38,7 +38,9 @@ def load_checkpoint(path, cfg, device):
             "Verify these match the training run or accuracy will silently collapse."
         )
 
-    if "fc.2.weight" in state:
+    if "fc.weight" in state:
+        num_classes = state["fc.weight"].shape[0]
+    elif "fc.2.weight" in state:
         num_classes = state["fc.2.weight"].shape[0]
     elif "fc2.weight" in state:
         num_classes = state["fc2.weight"].shape[0]
