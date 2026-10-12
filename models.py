@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 from torchvision.models import resnet18
 
 def get_model(model_name, num_classes=10, dropout=0.5):
@@ -6,10 +7,11 @@ def get_model(model_name, num_classes=10, dropout=0.5):
         return CNN(num_classes=num_classes, dropout=dropout)
     if model_name == "resnet18":
         model = resnet18(weights=None)
-        model.fc = torch.nn.Sequential(
-            torch.nn.Dropout(p=dropout),
-            torch.nn.Linear(model.fc.in_features, num_classes),
+        model.conv1 = nn.Conv2d(
+            3, 64, kernel_size=3, stride=1, padding=1, bias=False
         )
+        model.maxpool = nn.Identity()
+        model.fc = nn.Linear(512, num_classes)
         return model
     else:
         raise ValueError("Unsupported model name")
