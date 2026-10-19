@@ -8,7 +8,12 @@ from metrics import evaluate_model
 
 
 class ModelEma:
-    """Exponential moving average of the weights, evaluated instead of the raw model."""
+    """Exponential moving average of the weights.
+
+    ``update`` must be called **once per optimizer step**. Calling it once per epoch
+    with a decay close to 1 makes the average barely move from the random
+    initialisation, which silently turns validation into noise.
+    """
 
     def __init__(self, model, decay):
         self.decay = float(decay)
@@ -24,6 +29,28 @@ class ModelEma:
                 value.mul_(self.decay).add_(source[name].detach(), alpha=1 - self.decay)
             else:
                 value.copy_(source[name])
+
+
+def evaluate(model, loader, criterion, device, description):
+    """Loss and metrics for one split, with the model in eval mode."""
+    model.eval()
+    running_loss = 0.0
+    all_labels = []
+    all_predictions = []
+    with torch.no_grad():
+        progress = tqdm(loader, desc=description, leave=False)
+        for images, labels in progress:
+            images, labels = images.to(device), labels.to(device)
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            running_loss += loss.item() * images.size(0)
+            all_labels.extend(labels.cpu().tolist())
+            all_predictions.extend(outputs.argmax(dim=1).cpu().tolist())
+            progress.set_postfix(loss=f'{loss.item():.4f}')
+    return (
+        running_loss / len(loader.dataset),
+        evaluate_model(all_labels, all_predictions),
+    )
 
 
 def training_loop(
@@ -65,6 +92,10 @@ def training_loop(
             optimizer.step()
             if scheduler is not None:
                 scheduler.step()
+            if ema is not None:
+                # Per step, not per epoch: with 727 steps/epoch a per-epoch update at
+                # decay 0.999 stays ~97% at the random init after 30 epochs.
+                ema.update(model)
 
             global_step += 1
             current_lr = optimizer.param_groups[0]["lr"]
@@ -83,48 +114,52 @@ def training_loop(
         print(f'Training Accuracy: {train_metrics["accuracy"]:.4f}')
         print(f'Training F1 Score: {train_metrics["f1_score"]:.4f}')
 
-        # Validation phase. Evaluate the EMA weights when they are enabled; they track
-        # the raw model closely and are usually a little more accurate.
+        # Validation: evaluate the raw and the EMA weights and keep whichever is more
+        # accurate. Early on the EMA still carries a lot of the initialisation, so
+        # blindly trusting it would discard a good raw model.
+        val_epoch_loss, val_metrics = evaluate(
+            model, val_loader, criterion, device, f'Epoch {epoch + 1} Validation'
+        )
+        raw_accuracy = val_metrics["accuracy"]
+        ema_accuracy = None
+        eval_model = model
         if ema is not None:
-            ema.update(model)
-            eval_model = ema.module
-        else:
-            eval_model = model
-        eval_model.eval()
-        val_running_loss = 0.0
-        val_labels = []
-        val_predictions = []
-        with torch.no_grad():
-            val_progress = tqdm(val_loader, desc=f'Epoch {epoch + 1} Validation', leave=False)
-            for images, labels in val_progress:
-                images, labels = images.to(device), labels.to(device)
-                outputs = eval_model(images)
-                loss = criterion(outputs, labels)
-                val_running_loss += loss.item() * images.size(0)
-                val_labels.extend(labels.cpu().tolist())
-                val_predictions.extend(outputs.argmax(dim=1).cpu().tolist())
-                val_progress.set_postfix(loss=f'{loss.item():.4f}')
-
-        val_epoch_loss = val_running_loss / len(val_loader.dataset)
-        val_metrics = evaluate_model(val_labels, val_predictions)
+            ema_loss, ema_metrics = evaluate(
+                ema.module,
+                val_loader,
+                criterion,
+                device,
+                f'Epoch {epoch + 1} Validation (EMA)',
+            )
+            ema_accuracy = ema_metrics["accuracy"]
+            print(
+                f'Epoch {epoch+1}/{cfg.epochs}, '
+                f'Validation Accuracy raw {raw_accuracy:.4f} / EMA {ema_accuracy:.4f}'
+            )
+            if ema_accuracy >= raw_accuracy:
+                val_epoch_loss = ema_loss
+                val_metrics = ema_metrics
+                eval_model = ema.module
         print(f'Epoch {epoch+1}/{cfg.epochs}, Validation Loss: {val_epoch_loss:.4f}')
         print(f'Validation Accuracy: {val_metrics["accuracy"]:.4f}')
         print(f'Validation F1 Score: {val_metrics["f1_score"]:.4f}')
         if run is not None:
-            run.log(
-                {
-                    "epoch": epoch + 1,
-                    "train_loss": epoch_loss,
-                    "train_accuracy": train_metrics["accuracy"],
-                    "train_f1_score": train_metrics["f1_score"],
-                    "val_loss": val_epoch_loss,
-                    "val_accuracy": val_metrics["accuracy"],
-                    "val_f1_score": val_metrics["f1_score"],
-                    "learning_rate": sum(lr_samples) / len(lr_samples),
-                    "train_classification_report": train_metrics["classification_report"],
-                    "val_classification_report": val_metrics["classification_report"],
-                }
-            )
+            log_payload = {
+                "epoch": epoch + 1,
+                "train_loss": epoch_loss,
+                "train_accuracy": train_metrics["accuracy"],
+                "train_f1_score": train_metrics["f1_score"],
+                "val_loss": val_epoch_loss,
+                "val_accuracy": val_metrics["accuracy"],
+                "val_accuracy_raw": raw_accuracy,
+                "val_f1_score": val_metrics["f1_score"],
+                "learning_rate": sum(lr_samples) / len(lr_samples),
+                "train_classification_report": train_metrics["classification_report"],
+                "val_classification_report": val_metrics["classification_report"],
+            }
+            if ema_accuracy is not None:
+                log_payload["val_accuracy_ema"] = ema_accuracy
+            run.log(log_payload)
 
         # Checkpointing: the Kaggle metric is accuracy, so select on accuracy rather than
         # on the smoothed loss (with label_smoothing=0.1 the loss keeps improving after
@@ -134,7 +169,7 @@ def training_loop(
             torch.save(
                 {
                     "model_state": eval_model.state_dict(),
-                    "ema": ema is not None,
+                    "ema": eval_model is not model,
                     "backbone": cfg.backbone,
                     "dropout": cfg.dropout,
                     "resolution": cfg.resolution,

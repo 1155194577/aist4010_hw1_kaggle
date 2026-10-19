@@ -19,9 +19,9 @@ from PIL import Image
 REPO = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO))
 
-from config import Config, seed_everything  # noqa: E402
+from config import Config, seed_everything, to_dict  # noqa: E402
 from dataset import get_test_loader, get_train_val_split  # noqa: E402
-from engine import training_loop  # noqa: E402
+from engine import ModelEma, training_loop  # noqa: E402
 from models import MarginHead, get_model  # noqa: E402
 from predict import load_checkpoint, predict  # noqa: E402
 
@@ -111,6 +111,16 @@ def run_head(head: str, root: Path):
     assert loaded_classes == num_classes
     assert class_names == train_loader.dataset.classes
 
+    # engine's resumable checkpoint stores the raw weights plus the full cfg, not the
+    # flat metadata; it must still rebuild the right architecture.
+    last_style = root / f"last_{head}.pt"
+    torch.save({"model_state": ckpt["model_state"], "cfg": to_dict(cfg)}, last_style)
+    _, last_cfg, _, last_classes = load_checkpoint(
+        last_style, Config(paths=root), torch.device("cpu")
+    )
+    assert last_cfg.head == head and last_classes == num_classes
+    assert last_cfg.backbone == cfg.backbone
+
     names, predictions, confidences = predict(
         model, get_test_loader(cfg), torch.device("cpu"), tta=True
     )
@@ -193,8 +203,26 @@ def resnet34_64px():
     print("[ok] resnet34 at 64 px: forward/backward, 512-d embedding")
 
 
+def ema_tracks_weights():
+    model = get_model("simpleCNN", num_classes=3, dropout=0.0)
+    ema = ModelEma(model, decay=0.9)
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.add_(0.05)
+        for _ in range(400):
+            ema.update(model)
+    largest = max(
+        (ema.module.state_dict()[key].float() - value.float()).abs().max().item()
+        for key, value in model.state_dict().items()
+        if value.dtype.is_floating_point
+    )
+    assert largest < 1e-5, largest
+    print("[ok] EMA converges to the weights it tracks")
+
+
 def main():
     margin_head_learns()
+    ema_tracks_weights()
     resnet34_64px()
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)

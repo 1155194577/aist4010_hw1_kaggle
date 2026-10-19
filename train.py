@@ -12,6 +12,12 @@ def main():
         train_loader, val_loader = get_train_val_split(cfg)
         num_classes = len(train_loader.dataset.classes)
         model = cfg.create_model(num_classes)
+        print(
+            f"backbone={cfg.backbone} head={cfg.head} res={cfg.resolution} "
+            f"epochs={cfg.epochs} batch={cfg.batch_size} lr={cfg.lr} "
+            f"ema={cfg.ema_decay} erasing={cfg.random_erasing} "
+            f"params={sum(p.numel() for p in model.parameters()) / 1e6:.2f}M"
+        )
         wandb.watch(model, log="all", log_freq=100)
         optimizer = cfg.create_optimizer(model)
         scheduler = cfg.create_scheduler(optimizer, len(train_loader))

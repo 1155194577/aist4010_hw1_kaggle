@@ -119,5 +119,6 @@ Pass several checkpoints to ensemble them (they must share the same class list):
 ```
 
 Ensembling 2-3 seeds is usually worth more than any single hyperparameter change.
-When EMA is enabled the best checkpoint stores the averaged weights, which are
-what `predict.py` loads.
+When EMA is enabled the engine validates both the raw and the averaged weights and
+keeps whichever is more accurate, so an early-epoch EMA can never overwrite a good
+raw model.

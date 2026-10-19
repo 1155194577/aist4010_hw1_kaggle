@@ -28,7 +28,14 @@ def load_checkpoint(path, cfg, device):
         )
 
     # Head geometry is part of the architecture, not just a training choice, so it must
-    # be restored from the checkpoint before building the model.
+    # be restored from the checkpoint before building the model. ``last.pt`` stores the
+    # full config under "cfg" instead of repeating the fields at the top level, so fall
+    # back to it there.
+    saved_cfg = meta.get("cfg") if isinstance(meta.get("cfg"), dict) else {}
+
+    def checkpoint_value(key):
+        return meta[key] if key in meta else saved_cfg.get(key)
+
     for key, attr in (
         ("backbone", "backbone"),
         ("dropout", "dropout"),
@@ -38,18 +45,20 @@ def load_checkpoint(path, cfg, device):
         ("scale", "scale"),
         ("bnneck", "bnneck"),
     ):
-        if key in meta:
-            cfg = replace(cfg, **{attr: meta[key]})
+        value = checkpoint_value(key)
+        if value is not None:
+            cfg = replace(cfg, **{attr: value})
     for key, attr in (("mean", "mean"), ("std", "std")):
-        if key in meta:
-            setattr(cfg, attr, tuple(meta[key]))
+        value = checkpoint_value(key)
+        if value is not None:
+            setattr(cfg, attr, tuple(value))
     class_names = meta.get("class_names")
 
     if class_names is None:
         print(
-            "WARNING: checkpoint has no metadata; using Config defaults "
-            f"(backbone={cfg.backbone}, head={cfg.head}, resolution={cfg.resolution}). "
-            "Verify these match the training run or accuracy will silently collapse."
+            "WARNING: checkpoint has no class_names; using "
+            f"backbone={cfg.backbone}, head={cfg.head}, resolution={cfg.resolution} "
+            "and the training folder's class order."
         )
 
     if "head.weight" in state:

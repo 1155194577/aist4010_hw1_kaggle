@@ -49,7 +49,7 @@ class Config:
     scale: float = 30.0
     bnneck: bool = True
     margin_warmup_epochs: int = 2
-    ema_decay: float = 0.999  # 0 disables weight averaging
+    ema_decay: float = 0.999  # per-step weight average; 0 disables
     random_erasing: float = 0.25  # Cutout-style occlusion probability; 0 disables
     # Only used by the "linear" head; margin losses train better without smoothing.
     label_smoothing: float = 0.1
