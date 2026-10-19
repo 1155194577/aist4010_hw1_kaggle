@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
 from torchvision.datasets import ImageFolder
 
 from config import Config
@@ -62,27 +63,81 @@ def load_checkpoint(path, cfg, device):
     return model, cfg, class_names, num_classes
 
 
+def _resize(images, resolution):
+    if tuple(images.shape[-2:]) == (resolution, resolution):
+        return images
+    return F.interpolate(
+        images,
+        size=(resolution, resolution),
+        mode="bilinear",
+        align_corners=False,
+        antialias=True,
+    )
+
+
+def _tta_views(images, resolution, scales, flip):
+    """Grow the image by ``scale``, centre-crop back, optionally hflip."""
+    base = _resize(images, resolution)
+    for scale in scales:
+        if scale == 1.0:
+            view = base
+        else:
+            enlarged = F.interpolate(
+                base,
+                scale_factor=scale,
+                mode="bilinear",
+                align_corners=False,
+                antialias=True,
+            )
+            offset = (enlarged.shape[-1] - resolution) // 2
+            view = enlarged[..., offset : offset + resolution, offset : offset + resolution]
+        yield view
+        if flip:
+            yield torch.flip(view, dims=[3])
+
+
 def predict(
-    model,
+    models,
     loader,
     device,
-    tta,
+    tta=False,
+    tta_scales=None,
+    resolutions=None,
 ):
     """
-    this is the inference function, it will return the predictions, confidence and names of the images
+    Average softmax probabilities over checkpoints and TTA views.
+
+    ``models`` may be a single model (backwards compatible) or a list of models.
+    ``tta_scales`` are zoom factors >= 1.0; each view is also horizontally flipped.
     """
+    if not isinstance(models, (list, tuple)):
+        models = [models]
+    if tta_scales is None:
+        tta_scales = [1.0, 1.15] if tta else [1.0]
+    tta_scales = [float(scale) for scale in tta_scales]
+    if any(scale < 1.0 for scale in tta_scales):
+        raise ValueError("TTA scales must be >= 1.0 (they zoom in before cropping).")
+    flip = bool(tta or len(tta_scales) > 1)
+    if resolutions is None:
+        resolutions = [None] * len(models)
+
+    for model in models:
+        model.eval()
+
+    views_per_model = len(tta_scales) * (2 if flip else 1)
     predictions = []
     confidences = []
     names = []
     with torch.no_grad():
         for images, batch_names in loader:
             images = images.to(device)
-            probabilities = torch.softmax(model(images), dim=1)
-            if tta:
-                flipped = torch.flip(images, dims=[3])
-                probabilities = (
-                    probabilities + torch.softmax(model(flipped), dim=1)
-                ) / 2
+            probabilities = None
+            for model, resolution in zip(models, resolutions):
+                size = resolution or images.shape[-1]
+                for view in _tta_views(images, size, tta_scales, flip):
+                    probs = torch.softmax(model(view), dim=1)
+                    probabilities = probs if probabilities is None else probabilities + probs
+            probabilities = probabilities / (len(models) * views_per_model)
             confidence, labels = probabilities.max(dim=1)
             predictions.extend(labels.cpu().tolist())
             confidences.extend(confidence.cpu().tolist())
@@ -140,32 +195,74 @@ def validate_submission_vocabulary(output_labels, sample_submission_path: Path) 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--checkpoint", type=Path, default=Path("checkpoints/best_model.pt"))
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        nargs="+",
+        default=[Path("checkpoints/best_model.pt")],
+        help="One or more checkpoints; probabilities are averaged (ensemble).",
+    )
     parser.add_argument("--test-dir", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=Path("submission.csv"))
     parser.add_argument("--verify", action="store_true")
-    parser.add_argument("--tta", action="store_true")
+    parser.add_argument("--tta", action="store_true", help="hflip + 1.15x zoom TTA")
+    parser.add_argument(
+        "--tta-scales",
+        type=float,
+        nargs="+",
+        default=None,
+        help="Explicit zoom factors for TTA, e.g. 1.0 1.15 1.3 (implies --tta).",
+    )
     parser.add_argument("--allow-collapse", action="store_true")
     args = parser.parse_args()
 
-    cfg = Config()
+    base_cfg = Config()
     if args.test_dir is not None:
-        cfg = replace(cfg, test_dir=args.test_dir)
+        base_cfg = replace(base_cfg, test_dir=args.test_dir)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model, cfg, class_names, num_classes = load_checkpoint(
-        args.checkpoint, cfg, device
-    )
 
+    models = []
+    cfgs = []
+    class_names = None
+    num_classes = None
+    for checkpoint_path in args.checkpoint:
+        model, model_cfg, names, classes = load_checkpoint(
+            checkpoint_path, base_cfg, device
+        )
+        if not models:
+            class_names, num_classes = names, classes
+        elif names != class_names or classes != num_classes:
+            raise ValueError(
+                f"{checkpoint_path} uses a different class list or class count than "
+                f"{args.checkpoint[0]}; only checkpoints of the same run family can "
+                "be ensembled."
+            )
+        models.append(model)
+        cfgs.append(model_cfg)
     if class_names is None:
-        class_names = ImageFolder(cfg.train_dir).classes
+        class_names = ImageFolder(cfgs[0].train_dir).classes
     if len(class_names) != num_classes:
         raise ValueError("Training class count differs from checkpoint classifier.")
 
+    cfg = cfgs[0]
+    scales = args.tta_scales if args.tta_scales is not None else ([1.0, 1.15] if args.tta else [1.0])
+    print(
+        f"Loaded {len(models)} checkpoint(s); TTA scales {scales}"
+        + (" with hflip" if args.tta or args.tta_scales is not None else "")
+    )
+
     if args.verify:
-        verify(model, cfg, class_names, num_classes, device)
+        verify(models[0], cfg, class_names, num_classes, device)
 
     loader = get_test_loader(cfg)
-    names, predictions, confidences = predict(model, loader, device, args.tta)
+    names, predictions, confidences = predict(
+        models,
+        loader,
+        device,
+        tta=args.tta,
+        tta_scales=args.tta_scales,
+        resolutions=[model_cfg.resolution for model_cfg in cfgs],
+    )
     if len(names) != len(loader.dataset):
         raise RuntimeError("Prediction count does not match test dataset size.")
     if any(label < 0 or label >= num_classes for label in predictions):

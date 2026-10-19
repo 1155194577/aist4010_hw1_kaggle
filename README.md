@@ -67,6 +67,8 @@ margin: float = 0.35
 scale: float = 30.0
 bnneck: bool = True
 margin_warmup_epochs: int = 2
+ema_decay: float = 0.999      # exponential moving average of the weights; 0 disables
+random_erasing: float = 0.25  # Cutout-style occlusion augmentation; 0 disables
 ```
 
 `margin_warmup_epochs` ramps the margin in from zero so the first epochs are
@@ -93,10 +95,21 @@ Generate a submission from the best checkpoint:
 .venv/bin/python predict.py
 ```
 
-Run validation checks against the checkpoint, or enable horizontal-flip test
-time augmentation:
+Run validation checks against the checkpoint, or enable test-time augmentation:
 
 ```bash
 .venv/bin/python predict.py --verify
 .venv/bin/python predict.py --tta
+.venv/bin/python predict.py --tta-scales 1.0 1.15 1.3
 ```
+
+TTA averages probabilities over horizontal flips and zoom-then-centre-crop views.
+Pass several checkpoints to ensemble them (they must share the same class list):
+
+```bash
+.venv/bin/python predict.py --checkpoint checkpoints/run_a.pt checkpoints/run_b.pt --tta
+```
+
+Ensembling 2-3 seeds is usually worth more than any single hyperparameter change.
+When EMA is enabled the best checkpoint stores the averaged weights, which are
+what `predict.py` loads.
