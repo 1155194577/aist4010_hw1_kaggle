@@ -49,6 +49,8 @@ class Config:
     scale: float = 30.0
     bnneck: bool = True
     margin_warmup_epochs: int = 2
+    ema_decay: float = 0.999  # 0 disables weight averaging
+    random_erasing: float = 0.25  # Cutout-style occlusion probability; 0 disables
     # Only used by the "linear" head; margin losses train better without smoothing.
     label_smoothing: float = 0.1
     checkpoint_path: Path = Path("./checkpoints/best_model.pt")
@@ -154,6 +156,8 @@ def to_dict(cfg: Config) -> dict:
         "scale": cfg.scale,
         "bnneck": cfg.bnneck,
         "margin_warmup_epochs": cfg.margin_warmup_epochs,
+        "ema_decay": cfg.ema_decay,
+        "random_erasing": cfg.random_erasing,
         "label_smoothing": cfg.label_smoothing,
         "checkpoint_path": str(cfg.checkpoint_path),
     }

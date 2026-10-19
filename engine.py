@@ -1,8 +1,29 @@
+import copy
+
 import torch
 from tqdm import tqdm
 
 from config import to_dict
 from metrics import evaluate_model
+
+
+class ModelEma:
+    """Exponential moving average of the weights, evaluated instead of the raw model."""
+
+    def __init__(self, model, decay):
+        self.decay = float(decay)
+        self.module = copy.deepcopy(model).eval()
+        for parameter in self.module.parameters():
+            parameter.requires_grad_(False)
+
+    @torch.no_grad()
+    def update(self, model) -> None:
+        source = model.state_dict()
+        for name, value in self.module.state_dict().items():
+            if value.dtype.is_floating_point:
+                value.mul_(self.decay).add_(source[name].detach(), alpha=1 - self.decay)
+            else:
+                value.copy_(source[name])
 
 
 def training_loop(
@@ -20,6 +41,7 @@ def training_loop(
     best_val_loss = float('inf')
     best_val_accuracy = -1.0
     global_step = 0
+    ema = ModelEma(model, cfg.ema_decay) if cfg.ema_decay > 0 else None
     cfg.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     
     for epoch in tqdm(range(cfg.epochs), desc='Epochs'):
@@ -61,8 +83,14 @@ def training_loop(
         print(f'Training Accuracy: {train_metrics["accuracy"]:.4f}')
         print(f'Training F1 Score: {train_metrics["f1_score"]:.4f}')
 
-        # Validation phase
-        model.eval()
+        # Validation phase. Evaluate the EMA weights when they are enabled; they track
+        # the raw model closely and are usually a little more accurate.
+        if ema is not None:
+            ema.update(model)
+            eval_model = ema.module
+        else:
+            eval_model = model
+        eval_model.eval()
         val_running_loss = 0.0
         val_labels = []
         val_predictions = []
@@ -70,7 +98,7 @@ def training_loop(
             val_progress = tqdm(val_loader, desc=f'Epoch {epoch + 1} Validation', leave=False)
             for images, labels in val_progress:
                 images, labels = images.to(device), labels.to(device)
-                outputs = model(images)
+                outputs = eval_model(images)
                 loss = criterion(outputs, labels)
                 val_running_loss += loss.item() * images.size(0)
                 val_labels.extend(labels.cpu().tolist())
@@ -105,7 +133,8 @@ def training_loop(
             best_val_accuracy = val_metrics["accuracy"]
             torch.save(
                 {
-                    "model_state": model.state_dict(),
+                    "model_state": eval_model.state_dict(),
+                    "ema": ema is not None,
                     "backbone": cfg.backbone,
                     "dropout": cfg.dropout,
                     "resolution": cfg.resolution,

@@ -58,6 +58,13 @@ def make_transform(cfg: Config, train: bool = True) -> transforms.Compose:
             transforms.Normalize(cfg.mean, cfg.std),
         ]
     )
+    if train and cfg.augmentation and cfg.random_erasing > 0:
+        # Cutout-style occlusion: cheap robustness for faces and a reliable small gain.
+        transform_list.append(
+            transforms.RandomErasing(
+                p=cfg.random_erasing, scale=(0.02, 0.15), value="random"
+            )
+        )
     return transforms.Compose(transform_list)
 
 
