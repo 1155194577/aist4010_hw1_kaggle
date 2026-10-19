@@ -220,10 +220,30 @@ def ema_tracks_weights():
     print("[ok] EMA converges to the weights it tracks")
 
 
+def train_cli_overrides():
+    from train import build_config, parse_args
+
+    cfg = build_config(
+        parse_args(
+            ["--seed", "43", "--backbone", "resnet34", "--head", "cosface", "--epochs", "5"]
+        )
+    )
+    assert cfg.seed == 43 and cfg.backbone == "resnet34" and cfg.head == "cosface"
+    assert cfg.epochs == 5
+    assert cfg.checkpoint_path.name == "resnet34_cosface_seed43.pt", cfg.checkpoint_path
+    # a run that only changes epochs keeps the default checkpoint
+    assert build_config(parse_args(["--epochs", "3"])).checkpoint_path == Config().checkpoint_path
+    # an explicit checkpoint always wins
+    explicit = build_config(parse_args(["--seed", "1", "--checkpoint", "out/x.pt"]))
+    assert explicit.checkpoint_path == Path("out/x.pt")
+    print("[ok] train.py CLI overrides and per-run checkpoint naming")
+
+
 def main():
     margin_head_learns()
     ema_tracks_weights()
     resnet34_64px()
+    train_cli_overrides()
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         build_tiny_dataset(root)

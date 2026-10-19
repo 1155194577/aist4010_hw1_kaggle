@@ -31,6 +31,18 @@ Run one training experiment:
 .venv/bin/python train.py
 ```
 
+Any `Config` field can be overridden from the command line, which is how seeds are
+run without editing the file. Overriding `--seed`, `--backbone` or `--head` also
+gives the run its own checkpoint (`checkpoints/<backbone>_<head>_seed<seed>.pt`)
+so runs never overwrite each other:
+
+```bash
+.venv/bin/python train.py --seed 43
+.venv/bin/python train.py --seed 44 --backbone resnet34
+.venv/bin/python train.py --head cosface --epochs 80 --lr 1e-3 \
+    --checkpoint checkpoints/cosface_e80.pt
+```
+
 Run the configured trials as separate W&B runs:
 
 ```bash
