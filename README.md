@@ -55,6 +55,14 @@ To change the optimizer, update the `optimizer` field in `Config`:
 optimizer: str = "SGD"  # or "Adam", "AdamW", etc.
 ```
 
+Both `resnet18` and `resnet34` are available as backbones and share the 64 px
+stem (3x3 stride-1 first convolution, no max-pool, global average pooling), so
+switching is a one-line change:
+
+```python
+cfg.backbone = "resnet34"
+```
+
 ## Margin head (ArcFace / CosFace) and BNNeck
 
 The classifier is now an embedding backbone plus a BNNeck (`BatchNorm1d` on the

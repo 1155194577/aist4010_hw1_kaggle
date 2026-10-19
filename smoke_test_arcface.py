@@ -22,7 +22,7 @@ sys.path.insert(0, str(REPO))
 from config import Config, seed_everything  # noqa: E402
 from dataset import get_test_loader, get_train_val_split  # noqa: E402
 from engine import training_loop  # noqa: E402
-from models import MarginHead  # noqa: E402
+from models import MarginHead, get_model  # noqa: E402
 from predict import load_checkpoint, predict  # noqa: E402
 
 
@@ -177,8 +177,25 @@ def submission_cli(root: Path):
     print("[ok] predict.py CLI writes sample-submission-compatible ids")
 
 
+def resnet34_64px():
+    model = get_model("resnet34", num_classes=1000, head="arcface")
+    model.train()
+    images = torch.randn(2, 3, 64, 64)
+    labels = torch.randint(0, 1000, (2,))
+    logits = model(images, labels)
+    assert logits.shape == (2, 1000), logits.shape
+    logits.sum().backward()
+    assert model.embed_dim == 512
+    with torch.no_grad():
+        model.eval()
+        assert model(images).shape == (2, 1000)
+        assert model.embed(images).shape == (2, 512)
+    print("[ok] resnet34 at 64 px: forward/backward, 512-d embedding")
+
+
 def main():
     margin_head_learns()
+    resnet34_64px()
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         build_tiny_dataset(root)

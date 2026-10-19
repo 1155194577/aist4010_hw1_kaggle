@@ -41,7 +41,7 @@ class Config:
     optimizer: str = "Adam"
     scheduler: str = "CosineAnnealingWarmup"
     warmup_epochs: int = 1
-    backbone : str = "resnet18"
+    backbone : str = "resnet18"  # "resnet18" or "resnet34" (both adapted to 64 px)
     # "arcface" / "cosface" use a margin over cosine similarity (needs labels at
     # forward time); "linear" is the old plain softmax head.
     head: str = "arcface"

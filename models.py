@@ -16,7 +16,7 @@ Both cases return logits, so the training loop can keep using CrossEntropyLoss.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import resnet18
+from torchvision.models import resnet18, resnet34
 
 
 class MarginHead(nn.Module):
@@ -133,13 +133,24 @@ class FaceClassifier(nn.Module):
             self.head.set_epoch(epoch)
 
 
-def _resnet18_backbone(dropout):
-    model = resnet18(weights=None)
+def _resnet_backbone(builder, dropout):
+    """ResNet stem adapted to 64x64 inputs.
+
+    A 3x3/stride-1 first convolution plus no max-pool keeps enough spatial detail
+    for faces at 64 px: the last stage still sees an 8x8 feature map instead of 2x2.
+    """
+    model = builder(weights=None)
     model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
     model.maxpool = nn.Identity()
     model.fc = nn.Identity()
     model.avgpool = nn.Sequential(model.avgpool, nn.Dropout(dropout))
     return model, 512
+
+
+_BACKBONES = {
+    "resnet18": resnet18,
+    "resnet34": resnet34,
+}
 
 
 def _simple_cnn_backbone(dropout):
@@ -158,10 +169,13 @@ def get_model(
 ):
     if model_name == "simpleCNN":
         backbone, embed_dim = _simple_cnn_backbone(dropout)
-    elif model_name == "resnet18":
-        backbone, embed_dim = _resnet18_backbone(dropout)
+    elif model_name in _BACKBONES:
+        backbone, embed_dim = _resnet_backbone(_BACKBONES[model_name], dropout)
     else:
-        raise ValueError("Unsupported model name")
+        raise ValueError(
+            f"Unsupported model '{model_name}'. "
+            f"Choose one of: simpleCNN, {', '.join(sorted(_BACKBONES))}."
+        )
 
     return FaceClassifier(
         backbone,
