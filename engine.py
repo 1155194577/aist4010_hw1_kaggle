@@ -1,6 +1,7 @@
 import torch
 from tqdm import tqdm
 
+from config import to_dict
 from metrics import evaluate_model
 
 
@@ -17,6 +18,7 @@ def training_loop(
 ):
     model.to(device)
     best_val_loss = float('inf')
+    best_val_accuracy = -1.0
     global_step = 0
     cfg.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     
@@ -41,11 +43,8 @@ def training_loop(
             global_step += 1
             current_lr = optimizer.param_groups[0]["lr"]
             lr_samples.append(current_lr)
-            if run is not None:
-                run.log(
-                    {"lr_step": current_lr, "global_step": global_step},
-                    step=global_step,
-                )
+            # NOTE: per-step run.log() here caused ~46k network round-trips per run.
+            # The epoch-level log below already records the mean learning rate.
 
             running_loss += loss.item() * images.size(0)
             train_labels.extend(labels.detach().cpu().tolist())
@@ -95,9 +94,11 @@ def training_loop(
                 }
             )
 
-        # Checkpointing
-        if val_epoch_loss < best_val_loss:
-            best_val_loss = val_epoch_loss
+        # Checkpointing: the Kaggle metric is accuracy, so select on accuracy rather than
+        # on the smoothed loss (with label_smoothing=0.1 the loss keeps improving after
+        # accuracy plateaus or degrades).
+        if val_metrics["accuracy"] > best_val_accuracy:
+            best_val_accuracy = val_metrics["accuracy"]
             torch.save(
                 {
                     "model_state": model.state_dict(),
@@ -107,9 +108,33 @@ def training_loop(
                     "mean": cfg.mean,
                     "std": cfg.std,
                     "class_names": train_loader.dataset.classes,
+                    "val_accuracy": best_val_accuracy,
+                    "val_loss": val_epoch_loss,
+                    "epoch": epoch + 1,
                 },
                 cfg.checkpoint_path,
             )
-            print(f'Checkpoint saved at epoch {epoch+1} with validation loss {best_val_loss:.4f}')
+            print(
+                f'Checkpoint saved at epoch {epoch+1} '
+                f'(val acc {best_val_accuracy:.4f}, val loss {val_epoch_loss:.4f})'
+            )
+        best_val_loss = min(best_val_loss, val_epoch_loss)
+
+        # Keep a resumable checkpoint so a preempted run does not lose every epoch.
+        last_path = cfg.checkpoint_path.with_name(
+            f"{cfg.checkpoint_path.stem}_last.pt"
+        )
+        torch.save(
+            {
+                "model_state": model.state_dict(),
+                "optimizer_state": optimizer.state_dict(),
+                "scheduler_state": (
+                    scheduler.state_dict() if scheduler is not None else None
+                ),
+                "epoch": epoch + 1,
+                "cfg": to_dict(cfg),
+            },
+            last_path,
+        )
 
     return best_val_loss

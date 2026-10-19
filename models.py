@@ -12,6 +12,9 @@ def get_model(model_name, num_classes=10, dropout=0.5):
         )
         model.maxpool = nn.Identity()
         model.fc = nn.Linear(512, num_classes)
+        # ``dropout`` used to be ignored for resnet18. Insert it after global pooling so
+        # the classifier keys (``fc.weight``) stay unchanged and old checkpoints still load.
+        model.avgpool = nn.Sequential(model.avgpool, nn.Dropout(dropout))
         return model
     else:
         raise ValueError("Unsupported model name")

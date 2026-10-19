@@ -72,6 +72,13 @@ def get_train_val_split(cfg):
     val_dataset = ImageFolder(cfg.val_dir, transform=make_transform(cfg, False))
     generator = torch.Generator().manual_seed(cfg.seed)
 
+    # prefetch_factor / persistent_workers are only valid with worker processes.
+    loader_kwargs = {
+        "pin_memory": torch.cuda.is_available(),
+        "persistent_workers": cfg.num_workers > 0,
+        "prefetch_factor": 4 if cfg.num_workers > 0 else None,
+    }
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=cfg.batch_size,
@@ -79,6 +86,8 @@ def get_train_val_split(cfg):
         num_workers=cfg.num_workers,
         worker_init_fn=seed_worker,
         generator=generator,
+        drop_last=True,
+        **loader_kwargs,
     )
     val_loader = DataLoader(
         val_dataset,
@@ -87,11 +96,21 @@ def get_train_val_split(cfg):
         num_workers=cfg.num_workers,
         worker_init_fn=seed_worker,
         generator=generator,
+        drop_last=False,
+        **loader_kwargs,
     )
 
     return train_loader, val_loader
 
 def get_test_loader(cfg):
     test_dataset = TestImageDataset(cfg.test_dir, transform=make_transform(cfg, False))
-    test_loader = DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers)
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=cfg.batch_size,
+        shuffle=False,
+        num_workers=cfg.num_workers,
+        pin_memory=torch.cuda.is_available(),
+        persistent_workers=cfg.num_workers > 0,
+        prefetch_factor=4 if cfg.num_workers > 0 else None,
+    )
     return test_loader
