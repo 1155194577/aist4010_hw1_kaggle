@@ -42,8 +42,39 @@ class Config:
     scheduler: str = "CosineAnnealingWarmup"
     warmup_epochs: int = 1
     backbone : str = "resnet18"
+    # "arcface" / "cosface" use a margin over cosine similarity (needs labels at
+    # forward time); "linear" is the old plain softmax head.
+    head: str = "arcface"
+    margin: float = 0.35
+    scale: float = 30.0
+    bnneck: bool = True
+    margin_warmup_epochs: int = 2
+    # Only used by the "linear" head; margin losses train better without smoothing.
     label_smoothing: float = 0.1
     checkpoint_path: Path = Path("./checkpoints/best_model.pt")
+
+    def create_model(self, num_classes: int) -> torch.nn.Module:
+        from models import get_model
+
+        return get_model(
+            self.backbone,
+            num_classes=num_classes,
+            dropout=self.dropout,
+            head=self.head,
+            margin=self.margin,
+            scale=self.scale,
+            bnneck=self.bnneck,
+            margin_warmup_epochs=self.margin_warmup_epochs,
+        )
+
+    def create_criterion(self) -> torch.nn.Module:
+        """Cross-entropy on the head's logits.
+
+        Margin losses already include their own regularisation, so label smoothing is
+        disabled for them; it is kept for the plain linear head.
+        """
+        smoothing = self.label_smoothing if self.head == "linear" else 0.0
+        return torch.nn.CrossEntropyLoss(label_smoothing=smoothing)
 
     def create_optimizer(self, model: torch.nn.Module) -> torch.optim.Optimizer:
         try:
@@ -118,6 +149,11 @@ def to_dict(cfg: Config) -> dict:
         "optimizer": cfg.optimizer,
         "scheduler": cfg.scheduler,
         "warmup_epochs": cfg.warmup_epochs,
+        "head": cfg.head,
+        "margin": cfg.margin,
+        "scale": cfg.scale,
+        "bnneck": cfg.bnneck,
+        "margin_warmup_epochs": cfg.margin_warmup_epochs,
         "label_smoothing": cfg.label_smoothing,
         "checkpoint_path": str(cfg.checkpoint_path),
     }
