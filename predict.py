@@ -180,9 +180,10 @@ def main() -> None:
     with args.output.open("w", newline="") as file:
         writer = csv.writer(file)
         writer.writerow(["id", "label"])
-        writer.writerows(
-            (Path(name).stem, label) for name, label in zip(names, output_labels)
-        )
+        # Kaggle matches the `id` column against sample_submission.csv, whose ids keep
+        # the file extension (test_123.jpg). Path(name).stem produced "test_123", so
+        # no row matched and the submission was rejected / scored 0.
+        writer.writerows(zip(names, output_labels))
     print(f"Mean confidence: {sum(confidences) / len(confidences):.4f}")
     print(f"Class distribution: {dict(sorted(counts.items()))}")
     print(f"Wrote {len(predictions)} predictions to {args.output}")
