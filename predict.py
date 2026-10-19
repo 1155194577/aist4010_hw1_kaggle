@@ -9,20 +9,33 @@ from torchvision.datasets import ImageFolder
 
 from config import Config
 from dataset import get_test_loader, make_transform
-from models import get_model
 
 
 def load_checkpoint(path, cfg, device):
     """
-        this func load the model params  
+    Rebuild the model described by the checkpoint metadata and load its weights.
     """
     checkpoint = torch.load(path, map_location=device)
     meta = checkpoint if isinstance(checkpoint, dict) else {}
     state = meta.get("model_state", checkpoint)
+
+    if "fc.weight" in state or "fc2.weight" in state:
+        raise ValueError(
+            "This checkpoint uses the old plain-CE head (fc/fc2 weights) and is not "
+            "compatible with the ArcFace/BNNeck model. Retrain with the current code, "
+            "or check out commit 21b779a to run inference on the old checkpoint."
+        )
+
+    # Head geometry is part of the architecture, not just a training choice, so it must
+    # be restored from the checkpoint before building the model.
     for key, attr in (
         ("backbone", "backbone"),
         ("dropout", "dropout"),
         ("resolution", "resolution"),
+        ("head", "head"),
+        ("margin", "margin"),
+        ("scale", "scale"),
+        ("bnneck", "bnneck"),
     ):
         if key in meta:
             cfg = replace(cfg, **{attr: meta[key]})
@@ -34,22 +47,16 @@ def load_checkpoint(path, cfg, device):
     if class_names is None:
         print(
             "WARNING: checkpoint has no metadata; using Config defaults "
-            f"(backbone={cfg.backbone}, resolution={cfg.resolution}). "
+            f"(backbone={cfg.backbone}, head={cfg.head}, resolution={cfg.resolution}). "
             "Verify these match the training run or accuracy will silently collapse."
         )
 
-    if "fc.weight" in state:
-        num_classes = state["fc.weight"].shape[0]
-    elif "fc.2.weight" in state:
-        num_classes = state["fc.2.weight"].shape[0]
-    elif "fc2.weight" in state:
-        num_classes = state["fc2.weight"].shape[0]
+    if "head.weight" in state:
+        num_classes = state["head.weight"].shape[0]
     else:
         raise ValueError("Checkpoint does not contain a recognized classifier head.")
 
-    model = get_model(
-        cfg.backbone, num_classes=num_classes, dropout=cfg.dropout
-    )
+    model = cfg.create_model(num_classes)
     model.load_state_dict(state)
     model.to(device).eval()
     return model, cfg, class_names, num_classes

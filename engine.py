@@ -23,6 +23,9 @@ def training_loop(
     cfg.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     
     for epoch in tqdm(range(cfg.epochs), desc='Epochs'):
+        if hasattr(model, "set_epoch"):
+            # Ramps the ArcFace/CosFace margin in over the first epochs.
+            model.set_epoch(epoch)
         model.train()
         running_loss = 0.0
         train_labels = []
@@ -33,7 +36,8 @@ def training_loop(
             images, labels = images.to(device), labels.to(device)
 
             optimizer.zero_grad()
-            outputs = model(images)
+            # Margin heads need the labels to subtract the margin from the target logit.
+            outputs = model(images, labels)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -108,6 +112,12 @@ def training_loop(
                     "mean": cfg.mean,
                     "std": cfg.std,
                     "class_names": train_loader.dataset.classes,
+                    "head": cfg.head,
+                    "margin": cfg.margin,
+                    "scale": cfg.scale,
+                    "bnneck": cfg.bnneck,
+                    "num_classes": int(model.head.weight.shape[0]),
+                    "embed_dim": int(model.embed_dim),
                     "val_accuracy": best_val_accuracy,
                     "val_loss": val_epoch_loss,
                     "epoch": epoch + 1,

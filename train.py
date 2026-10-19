@@ -2,7 +2,6 @@ from config import Config, seed_everything
 from engine import training_loop
 import torch
 from dataset import get_train_val_split
-from models import get_model
 import wandb
 
 
@@ -12,13 +11,11 @@ def main():
     with wandb.init(project="aist4010-hw1", config=cfg.__dict__) as run:
         train_loader, val_loader = get_train_val_split(cfg)
         num_classes = len(train_loader.dataset.classes)
-        model = get_model(
-            cfg.backbone, num_classes=num_classes, dropout=cfg.dropout
-        )
+        model = cfg.create_model(num_classes)
         wandb.watch(model, log="all", log_freq=100)
         optimizer = cfg.create_optimizer(model)
         scheduler = cfg.create_scheduler(optimizer, len(train_loader))
-        criterion = torch.nn.CrossEntropyLoss(label_smoothing=cfg.label_smoothing)
+        criterion = cfg.create_criterion()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         best_val_loss = training_loop(
             model,

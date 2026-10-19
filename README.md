@@ -55,6 +55,38 @@ To change the optimizer, update the `optimizer` field in `Config`:
 optimizer: str = "SGD"  # or "Adam", "AdamW", etc.
 ```
 
+## Margin head (ArcFace / CosFace) and BNNeck
+
+The classifier is now an embedding backbone plus a BNNeck (`BatchNorm1d` on the
+embedding) and a margin head. The default is ArcFace, which replaces the plain
+softmax cross-entropy objective:
+
+```python
+head: str = "arcface"        # "arcface", "cosface", or "linear"
+margin: float = 0.35
+scale: float = 30.0
+bnneck: bool = True
+margin_warmup_epochs: int = 2
+```
+
+`margin_warmup_epochs` ramps the margin in from zero so the first epochs are
+stable; set it to `0` to use a constant margin. Label smoothing is applied only
+to the `linear` head, because margin losses already regularise the logits.
+
+The training loop passes labels to the model (`model(images, labels)`) so the
+margin is applied to the ground-truth logit only; inference
+(`model(images)`) returns `scale * cosine`. Checkpoints store `head`, `margin`,
+`scale`, and `bnneck`, so `predict.py` rebuilds the right architecture
+automatically. Checkpoints produced before this change use the old `fc` head and
+are rejected with an explanatory error — retrain them with the current code.
+
+Switching between heads is a one-line config change:
+
+```python
+cfg = Config()
+cfg.head = "cosface"   # or "linear" to reproduce the old baseline
+```
+
 Generate a submission from the best checkpoint:
 
 ```bash
