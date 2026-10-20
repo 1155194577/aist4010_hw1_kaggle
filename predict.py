@@ -160,6 +160,8 @@ def verify(
     class_names,
     num_classes,
     device,
+    tta=False,
+    tta_scales=None,
 ) -> None:
     val_dataset = ImageFolder(cfg.val_dir, transform=make_transform(cfg, train=False))
     if class_names is not None and val_dataset.classes != class_names:
@@ -170,36 +172,54 @@ def verify(
     loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers
     )
-    labels = []
+
+    scales = tta_scales if tta_scales is not None else ([1.0, 1.15] if tta else [1.0])
+    flip = bool(tta or tta_scales)
+    correct = 0
+    total = 0
     with torch.no_grad():
         for images, batch_labels in loader:
-            labels.extend(model(images.to(device)).argmax(dim=1).cpu().tolist())
-    accuracy = sum(
-        prediction == target
-        for prediction, target in zip(labels, val_dataset.targets)
-    ) / len(val_dataset)
-    print(f"Validation accuracy: {accuracy:.4f}")
+            images = images.to(device)
+            probabilities = None
+            for view in _tta_views(images, cfg.resolution, scales, flip):
+                probs = torch.softmax(model(view), dim=1)
+                probabilities = probs if probabilities is None else probabilities + probs
+            probabilities = probabilities / (len(scales) * (2 if flip else 1))
+            predicted = probabilities.argmax(dim=1).cpu()
+            correct += (predicted == batch_labels).sum().item()
+            total += batch_labels.size(0)
+
+    accuracy = correct / max(1, total)
+    suffix = " (TTA)" if flip else ""
+    print(f"Validation accuracy{suffix}: {accuracy:.4f}")
 
 
-def validate_submission_vocabulary(output_labels, sample_submission_path: Path) -> None:
-    if not sample_submission_path.exists():
-        return
+def validate_submission_vocabulary(
+    output_labels, class_names, sample_submission_path: Path = None
+) -> None:
+    """Check predicted labels against the training classes.
 
-    with sample_submission_path.open(newline="") as file:
-        reader = csv.DictReader(file)
-        if reader.fieldnames != ["id", "label"]:
-            raise ValueError(
-                f"Sample submission must have columns ['id', 'label']; "
-                f"found {reader.fieldnames}."
-            )
-        valid_labels = {row["label"] for row in reader}
-
+    The sample submission's ``label`` column is only placeholder data: 2,394 rows
+    drawn from 1,000 classes cover roughly 908 distinct names, so it must not be
+    treated as the label vocabulary. The authoritative vocabulary is the
+    checkpoint's ``class_names``.
+    """
+    valid_labels = set(class_names)
     unknown_labels = set(output_labels) - valid_labels
     if unknown_labels:
         raise ValueError(
-            f"Predictions contain labels not present in {sample_submission_path}: "
-            f"{sorted(unknown_labels)[:5]}"
+            f"Predictions contain labels outside the {len(valid_labels)} training "
+            f"classes: {sorted(unknown_labels)[:5]}"
         )
+
+    if sample_submission_path is not None and sample_submission_path.exists():
+        with sample_submission_path.open(newline="") as file:
+            reader = csv.DictReader(file)
+            if reader.fieldnames != ["id", "label"]:
+                raise ValueError(
+                    f"Sample submission must have columns ['id', 'label']; "
+                    f"found {reader.fieldnames}."
+                )
 
 
 def main() -> None:
@@ -261,7 +281,10 @@ def main() -> None:
     )
 
     if args.verify:
-        verify(models[0], cfg, class_names, num_classes, device)
+        verify(
+            models[0], cfg, class_names, num_classes, device,
+            tta=args.tta, tta_scales=args.tta_scales,
+        )
 
     loader = get_test_loader(cfg)
     names, predictions, confidences = predict(
@@ -278,7 +301,7 @@ def main() -> None:
         raise RuntimeError("Prediction contains a label outside the classifier range.")
     output_labels = [class_names[label] for label in predictions]
     validate_submission_vocabulary(
-        output_labels, cfg.paths / "sample_submission.csv"
+        output_labels, class_names, cfg.paths / "sample_submission.csv"
     )
     counts = Counter(output_labels)
     if predictions:

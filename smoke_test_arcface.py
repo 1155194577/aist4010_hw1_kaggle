@@ -24,7 +24,7 @@ from config import Config, seed_everything, to_dict  # noqa: E402
 from dataset import get_test_loader, get_train_val_split  # noqa: E402
 from engine import ModelEma, training_loop  # noqa: E402
 from models import MarginHead, get_model  # noqa: E402
-from predict import load_checkpoint, predict  # noqa: E402
+from predict import load_checkpoint, predict, verify  # noqa: E402
 
 
 def build_tiny_dataset(root: Path, classes=3, train_per_class=8, val_per_class=2, test_per=3):
@@ -106,11 +106,17 @@ def run_head(head: str, root: Path):
 
     # Reload through the inference path (uses only checkpoint metadata).
     model, loaded_cfg, class_names, loaded_classes = load_checkpoint(
-        cfg.checkpoint_path, Config(paths=root), torch.device("cpu")
+        cfg.checkpoint_path, cfg, torch.device("cpu")
     )
     assert loaded_cfg.head == head
     assert loaded_classes == num_classes
     assert class_names == train_loader.dataset.classes
+
+    # validation with TTA must run and use the checkpoint's val_dir
+    verify(
+        model, loaded_cfg, class_names, loaded_classes, torch.device("cpu"),
+        tta=True, tta_scales=[1.0, 1.15],
+    )
 
     # engine's resumable checkpoint stores the raw weights plus the full cfg, not the
     # flat metadata; it must still rebuild the right architecture.
@@ -293,12 +299,32 @@ def training_resume():
         print("[ok] *_last.pt resumes at the right epoch")
 
 
+
+def vocabulary_check():
+    """Sample-submission labels are placeholders, not the class vocabulary."""
+    from predict import validate_submission_vocabulary
+
+    with tempfile.TemporaryDirectory() as tmp:
+        sample = Path(tmp) / "sample.csv"
+        sample.write_text("id,label\ntest_0.jpg,id_0\n")
+        # id_1 does not appear in the sample's placeholder labels but is a real class
+        validate_submission_vocabulary(["id_0", "id_1"], ["id_0", "id_1"], sample)
+        try:
+            validate_submission_vocabulary(["id_2"], ["id_0", "id_1"], sample)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("unknown class was not rejected")
+    print("[ok] label validation uses class_names, not placeholder sample labels")
+
+
 def main():
     margin_head_learns()
     ema_tracks_weights()
     resnet34_64px()
     train_cli_overrides()
     training_resume()
+    vocabulary_check()
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         build_tiny_dataset(root)

@@ -16,6 +16,7 @@ CONFIG_FIELDS = (
     "head",
     "margin",
     "scale",
+    "bnneck",
     "epochs",
     "batch_size",
     "lr",
@@ -24,6 +25,7 @@ CONFIG_FIELDS = (
     "resolution",
     "random_erasing",
     "ema_decay",
+    "label_smoothing",
 )
 
 
@@ -35,6 +37,12 @@ def parse_args(argv=None):
     parser.add_argument("--seed", type=int, help="random seed")
     parser.add_argument("--backbone", choices=("resnet18", "resnet34", "simpleCNN"))
     parser.add_argument("--head", choices=("arcface", "cosface", "linear"))
+    parser.add_argument(
+        "--bnneck",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="BatchNorm on the embedding before the head (--no-bnneck to disable)",
+    )
     parser.add_argument("--margin", type=float, help="ArcFace/CosFace margin")
     parser.add_argument("--scale", type=float, help="cosine scale for margin heads")
     parser.add_argument("--epochs", type=int)
@@ -45,6 +53,7 @@ def parse_args(argv=None):
     parser.add_argument("--resolution", type=int)
     parser.add_argument("--random-erasing", type=float)
     parser.add_argument("--ema-decay", type=float, help="0 disables EMA")
+    parser.add_argument("--label-smoothing", type=float, help="default 0.1")
     parser.add_argument("--checkpoint", type=Path, help="output checkpoint path")
     parser.add_argument("--run-name", help="W&B run name")
     parser.add_argument(

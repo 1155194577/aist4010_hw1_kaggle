@@ -1,6 +1,7 @@
 venv/
 data/*
 checkpoints/
+logs/
 sweep_results/
 wandb/
 __pycache__/
