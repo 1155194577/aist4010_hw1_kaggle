@@ -43,6 +43,18 @@ so runs never overwrite each other:
     --checkpoint checkpoints/cosface_e80.pt
 ```
 
+Interrupted runs can continue from the resumable checkpoint written after every
+epoch. `--resume last` is a no-op on a fresh run, so the same command works on a
+spot instance:
+
+```bash
+.venv/bin/python train.py --seed 43 --resume last
+```
+
+On rented instances (AutoDL, cloud spot), `--shutdown` powers the machine off
+when training ends. See [AUTODL.md](AUTODL.md) for the full cost-saving workflow
+adapted from AutoDL's guide.
+
 Run the configured trials as separate W&B runs:
 
 ```bash

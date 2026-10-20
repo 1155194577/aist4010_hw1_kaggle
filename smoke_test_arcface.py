@@ -10,6 +10,7 @@ machine with torch installed::
 import csv
 import sys
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -239,11 +240,65 @@ def train_cli_overrides():
     print("[ok] train.py CLI overrides and per-run checkpoint naming")
 
 
+def training_resume():
+    """A run must be resumable from *_last.pt after interruption/preemption."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        build_tiny_dataset(root)
+        cfg = Config(
+            paths=root,
+            train_dir=root / "train",
+            val_dir=root / "val",
+            test_dir=root / "test",
+            checkpoint_path=root / "ckpt.pt",
+            epochs=2,
+            batch_size=4,
+            num_workers=0,
+            warmup_epochs=1,
+        )
+        seed_everything(cfg.seed)
+        train_loader, val_loader = get_train_val_split(cfg)
+        model = cfg.create_model(3)
+        optimizer = cfg.create_optimizer(model)
+        scheduler = cfg.create_scheduler(optimizer, len(train_loader))
+        criterion = cfg.create_criterion()
+        training_loop(
+            model, train_loader, val_loader, optimizer, criterion,
+            torch.device("cpu"), cfg, run=None, scheduler=scheduler,
+        )
+
+        last_path = cfg.checkpoint_path.with_name(
+            f"{cfg.checkpoint_path.stem}_last.pt"
+        )
+        state = torch.load(last_path, map_location="cpu")
+        assert state["epoch"] == 2
+        assert "best_val_accuracy" in state
+
+        # pretend the job was preempted after epoch 2 and resumed to 3 epochs
+        cfg_longer = replace(cfg, epochs=3)
+        resumed = cfg_longer.create_model(3)
+        resumed_opt = cfg_longer.create_optimizer(resumed)
+        resumed_sched = cfg_longer.create_scheduler(resumed_opt, len(train_loader))
+        resumed.load_state_dict(state["model_state"])
+        resumed_opt.load_state_dict(state["optimizer_state"])
+        training_loop(
+            resumed, train_loader, val_loader, resumed_opt, criterion,
+            torch.device("cpu"), cfg_longer, run=None, scheduler=resumed_sched,
+            start_epoch=state["epoch"],
+            best_val_accuracy=state["best_val_accuracy"],
+            best_val_loss=state["best_val_loss"],
+        )
+        state_after = torch.load(last_path, map_location="cpu")
+        assert state_after["epoch"] == 3, state_after["epoch"]
+        print("[ok] *_last.pt resumes at the right epoch")
+
+
 def main():
     margin_head_learns()
     ema_tracks_weights()
     resnet34_64px()
     train_cli_overrides()
+    training_resume()
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         build_tiny_dataset(root)

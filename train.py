@@ -1,4 +1,5 @@
 import argparse
+import os
 from dataclasses import replace
 from pathlib import Path
 
@@ -46,6 +47,16 @@ def parse_args(argv=None):
     parser.add_argument("--ema-decay", type=float, help="0 disables EMA")
     parser.add_argument("--checkpoint", type=Path, help="output checkpoint path")
     parser.add_argument("--run-name", help="W&B run name")
+    parser.add_argument(
+        "--resume",
+        type=Path,
+        help="resume from a *_last.pt checkpoint, or the literal 'last'",
+    )
+    parser.add_argument(
+        "--shutdown",
+        action="store_true",
+        help="power off the machine when training finishes (AutoDL/cloud instances)",
+    )
     return parser.parse_args(argv)
 
 
@@ -72,8 +83,7 @@ def build_config(args) -> Config:
     return cfg
 
 
-def main(argv=None):
-    args = parse_args(argv)
+def run(args):
     cfg = build_config(args)
     seed_everything(cfg.seed)
 
@@ -98,6 +108,39 @@ def main(argv=None):
         scheduler = cfg.create_scheduler(optimizer, len(train_loader))
         criterion = cfg.create_criterion()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        start_epoch = 0
+        best_val_loss = float("inf")
+        best_val_accuracy = -1.0
+        resume_path = args.resume
+        if resume_path is not None and str(resume_path) == "last":
+            resume_path = cfg.checkpoint_path.with_name(
+                f"{cfg.checkpoint_path.stem}_last.pt"
+            )
+        if resume_path is not None:
+            if not Path(resume_path).exists():
+                # Lets the same command be used on a fresh spot instance: if the
+                # checkpoint is not there yet, start from scratch instead of failing.
+                print(f"no checkpoint at {resume_path}; starting from scratch")
+                resume_path = None
+        if resume_path is not None:
+            state = torch.load(resume_path, map_location=device)
+            model.load_state_dict(state["model_state"])
+            if state.get("optimizer_state") is not None:
+                optimizer.load_state_dict(state["optimizer_state"])
+            if scheduler is not None and state.get("scheduler_state") is not None:
+                scheduler.load_state_dict(state["scheduler_state"])
+            start_epoch = int(state.get("epoch", 0))
+            best_val_loss = float(state.get("best_val_loss", best_val_loss))
+            best_val_accuracy = float(state.get("best_val_accuracy", best_val_accuracy))
+            print(
+                f"resumed {resume_path}: epoch {start_epoch}/{cfg.epochs}, "
+                f"best val acc {best_val_accuracy:.4f}, "
+                f"best val loss {best_val_loss:.4f}"
+            )
+            if start_epoch >= cfg.epochs:
+                print("checkpoint already reached cfg.epochs; nothing to train")
+
         best_val_loss = training_loop(
             model,
             train_loader,
@@ -108,9 +151,28 @@ def main(argv=None):
             cfg,
             run=run,
             scheduler=scheduler,
+            start_epoch=start_epoch,
+            best_val_loss=best_val_loss,
+            best_val_accuracy=best_val_accuracy,
         )
         run.summary["best_val_loss"] = best_val_loss
         run.summary["checkpoint"] = str(cfg.checkpoint_path)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    try:
+        run(args)
+    finally:
+        # Runs even if training raised, so a crashed job does not keep billing.
+        # Logs must already be redirected to a file: stdout is lost on shutdown.
+        if args.shutdown:
+            shutdown_bin = "/usr/bin/shutdown"
+            if os.path.exists(shutdown_bin):
+                print("shutting down the instance")
+                os.system(shutdown_bin)
+            else:
+                print("--shutdown requested but /usr/bin/shutdown does not exist")
 
 
 if __name__ == "__main__":

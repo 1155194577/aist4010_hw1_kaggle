@@ -63,15 +63,16 @@ def training_loop(
     cfg,
     run=None,
     scheduler=None,
+    start_epoch=0,
+    best_val_loss=float('inf'),
+    best_val_accuracy=-1.0,
 ):
     model.to(device)
-    best_val_loss = float('inf')
-    best_val_accuracy = -1.0
     global_step = 0
     ema = ModelEma(model, cfg.ema_decay) if cfg.ema_decay > 0 else None
     cfg.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     
-    for epoch in tqdm(range(cfg.epochs), desc='Epochs'):
+    for epoch in tqdm(range(start_epoch, cfg.epochs), desc='Epochs'):
         if hasattr(model, "set_epoch"):
             # Ramps the ArcFace/CosFace margin in over the first epochs.
             model.set_epoch(epoch)
@@ -207,6 +208,8 @@ def training_loop(
                 ),
                 "epoch": epoch + 1,
                 "cfg": to_dict(cfg),
+                "best_val_accuracy": best_val_accuracy,
+                "best_val_loss": best_val_loss,
             },
             last_path,
         )
